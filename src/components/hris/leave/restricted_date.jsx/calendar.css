@@ -1,0 +1,40 @@
+/* Center react-modal popups */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  /* top/right/bottom/left: 0 */
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  /* center content */
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  /* ensure above calendar */
+  padding: 16px;
+  /* small-screen breathing room */
+}
+
+.modal-content {
+  position: relative;
+  /* reset absolute default */
+  inset: auto !important;
+  /* clear any offsets */
+  transform: none !important;
+  /* no stray transforms */
+  width: 100%;
+  max-width: 520px;
+  /* nice readable width */
+  background: #fff;
+  border-radius: 12px;
+  border: none;
+  outline: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 20px;
+}
+
+@media (max-width: 480px) {
+  .modal-content {
+    max-width: 95vw;
+    padding: 16px;
+  }
+}

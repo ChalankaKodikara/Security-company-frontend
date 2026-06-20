@@ -1,0 +1,39 @@
+.santa-container {
+    position: fixed;
+    bottom: -150px;
+    /* start slightly below screen */
+    right: -200px;
+    /* start outside right side */
+    z-index: 99999;
+    pointer-events: none;
+
+    animation: santaCurve 18s linear infinite;
+}
+
+.santa-image {
+    width: 110px;
+    /* adjust size */
+    height: auto;
+}
+
+@keyframes santaCurve {
+    0% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+
+    25% {
+        transform: translate(-20vw, -10vh) rotate(-5deg);
+    }
+
+    50% {
+        transform: translate(-40vw, -25vh) rotate(-10deg);
+    }
+
+    75% {
+        transform: translate(-60vw, -45vh) rotate(-15deg);
+    }
+
+    100% {
+        transform: translate(-100vw, -80vh) rotate(-20deg);
+    }
+}

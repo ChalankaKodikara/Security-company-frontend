@@ -1,0 +1,58 @@
+/* Custom DatePicker Styles */
+.custom-datepicker .react-datepicker__header {
+    background-color: white;
+    border: none;
+    padding: 10px 0;
+    font-size: 1.5rem;
+    font-weight: 500;
+    text-align: center;
+}
+
+.custom-datepicker .react-datepicker__current-month {
+    font-size: 24px;
+    font-weight: bold;
+    color: #6A4C93;
+    
+}
+
+.custom-datepicker .react-datepicker__day-name,
+.custom-datepicker .react-datepicker__day,
+.custom-datepicker__current-month {
+    color: #6A4C93;
+   
+}
+
+.custom-datepicker .react-datepicker__day--selected,
+.custom-datepicker .react-datepicker__day--keyboard-selected {
+    background-color: #6A4C93;
+    color: white;
+    border-radius: 30%;
+    
+}
+
+.custom-datepicker .react-datepicker__navigation {
+    top: 15px;
+}
+
+.custom-datepicker .react-datepicker__navigation--previous {
+    left: 0;
+}
+
+.custom-datepicker .react-datepicker__navigation--next {
+    right: 0;
+}
+
+.custom-datepicker .react-datepicker__navigation-icon::before {
+    border-color: #6A4C93;
+    /* Purple arrow icons */
+}
+
+.custom-datepicker .react-datepicker__day--outside-month {
+    color: #e0e0e0;
+    /* Grey color for outside days */
+}
+
+.custom-datepicker .react-datepicker__day:hover {
+    background-color: #d1b6e2;
+    /* Light purple on hover */
+}

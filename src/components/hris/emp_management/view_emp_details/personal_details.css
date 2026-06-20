@@ -1,0 +1,20 @@
+/** @format */
+
+.custom-phone-input {
+  --PhoneInputCountryFlag-height: 20px; /* Adjust flag height */
+  --PhoneInputCountryFlag-borderColor: #cccccc; /* Outline color for the flag */
+  --PhoneInputCountrySelectArrow-color: #1d1e20; /* Arrow color */
+  --PhoneInputCountrySelectArrow-opacity: 1; /* Arrow visibility */
+  --PhoneInput-color--focus: #3182ce; /* Focus outline color */
+}
+
+/* Optional additional styles */
+.custom-phone-input .PhoneInputCountrySelect {
+  padding-right: 8px; /* Adjust spacing for the country dropdown */
+}
+
+.custom-phone-input .PhoneInputInput {
+  border: none;
+  outline: none;
+  padding-left: 8px; /* Adjust spacing for the input field */
+}

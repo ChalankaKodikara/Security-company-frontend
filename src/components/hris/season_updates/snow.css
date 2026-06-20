@@ -1,0 +1,31 @@
+/* snow.css */
+.snowflake {
+    position: fixed;
+    top: -10%;
+    color: white;
+    font-size: 1em;
+    animation: fall linear infinite, sway ease-in-out infinite;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  
+  /* Falling effect (entire screen) */
+  @keyframes fall {
+    0% {
+      transform: translateY(-100px);
+    }
+    100% {
+      transform: translateY(110vh); /* Fall off the bottom of the screen */
+    }
+  }
+  
+  /* Horizontal swaying effect */
+  @keyframes sway {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(50px); /* Adjust for wider horizontal swaying */
+    }
+  }
+  
