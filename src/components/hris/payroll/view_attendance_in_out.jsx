@@ -91,6 +91,18 @@ const ViewAttendanceInOut = () => {
       (sum, r) => sum + Number(r.overtime_hours || 0),
       0,
     );
+    const completedShift = rows.reduce(
+      (sum, r) => sum + Number(r.completed_shift || 0),
+      0,
+    );
+    const overtimeShift = rows.reduce(
+      (sum, r) => sum + Number(r.overtime_shift || 0),
+      0,
+    );
+    const payableShift = rows.reduce(
+      (sum, r) => sum + Number(r.payable_shift || 0),
+      0,
+    );
 
     return {
       totalDays,
@@ -99,9 +111,11 @@ const ViewAttendanceInOut = () => {
       dayShifts,
       nightShifts,
       overtime,
+      completedShift,
+      overtimeShift,
+      payableShift,
     };
   }, [rows]);
-
   const canSubmitAttendance = useMemo(() => {
     if (isLoading || fetchError) return false;
     if (!Array.isArray(rows) || rows.length === 0) return false;
@@ -561,6 +575,20 @@ const ViewAttendanceInOut = () => {
               <p className="text-xs text-slate-500">Overtime Hours</p>
               <p className="text-xl font-bold text-slate-900">
                 {summary.overtime}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-emerald-100 p-3 text-emerald-700">
+              <CheckCircle2 size={20} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Payable Shifts</p>
+              <p className="text-xl font-bold text-slate-900">
+                {summary.payableShift?.toFixed(2)}
               </p>
             </div>
           </div>
