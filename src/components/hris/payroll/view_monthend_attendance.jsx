@@ -1,122 +1,121 @@
 /** @format */
+
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Cookies from "js-cookie";
+import {
+  Search,
+  Users,
+  CalendarDays,
+  CheckCircle2,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+} from "lucide-react";
 import { apiFetch } from "../../../utils/apiClient";
 
 const ViewMonthendAttendance = ({ pageSize = 8, onRowClick }) => {
-
   const [searchFilter, setSearchFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const API_URL = process.env.REACT_APP_FRONTEND_URL;
-  const token = Cookies.get("accessToken");
-  const params = new URLSearchParams(location.search);
-  const orgId = params.get("org_id") || Cookies.get("organization_id");
-  const currentApiYear =
-    params.get("year") || new Date().getFullYear().toString();
-  const currentApiMonth =
-    params.get("month") || (new Date().getMonth() + 1).toString();
-  let prevMonth = Number(currentApiMonth) - 1;
-  let prevYear = Number(currentApiYear);
-  const displayYear = currentApiYear;
-  const displayMonth = String(currentApiMonth).padStart(2, "0");
-
-
-  if (prevMonth < 1) {
-    prevMonth = 12;
-    prevYear -= 1;
-  }
   const [rows, setRows] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState("");
   const [serverTotalPages, setServerTotalPages] = useState(1);
   const [serverCount, setServerCount] = useState(0);
 
-  /* -------------------- Fetch Employees (Filtered by org_id) -------------------- */
-  useEffect(() => {
-    if (!orgId) return; // Stop if no org id found
+  const navigate = useNavigate();
+  const location = useLocation();
 
-    const controller = new AbortController();
-    const run = async () => {
-      setIsLoading(true);
-      setFetchError("");
+  const API_URL = process.env.REACT_APP_FRONTEND_URL;
+  const token = Cookies.get("accessToken");
 
-      try {
+  const params = new URLSearchParams(location.search);
+  const orgId = params.get("org_id") || Cookies.get("organization_id");
+  const currentApiYear =
+    params.get("year") || new Date().getFullYear().toString();
+  const currentApiMonth =
+    params.get("month") || (new Date().getMonth() + 1).toString();
 
-        const params = new URLSearchParams({
-          organization: String(orgId),
-          year: String(displayYear),
-          month: String(Number(displayMonth)),
-          page: String(currentPage),
-          limit: String(pageSize),
-          payroll_group: "Ho",
-        });
+  const displayYear = currentApiYear;
+  const displayMonth = String(currentApiMonth).padStart(2, "0");
 
+  const fetchEmployees = async () => {
+    if (!orgId) return;
 
-        if (searchFilter.trim()) params.set("search", searchFilter.trim());
+    setIsLoading(true);
+    setFetchError("");
 
-        const res = await apiFetch(
-          `${API_URL}/v1/hris/employees/employees/active?${params.toString()}`,
-          {
-           
-            credentials: "include",
-            signal: controller.signal,
-          }
-        );
+    try {
+      const query = new URLSearchParams({
+        organization: String(orgId),
+        year: String(displayYear),
+        month: String(Number(displayMonth)),
+        page: String(currentPage),
+        limit: String(pageSize),
+        payroll_group: "Ho",
+      });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const json = await res.json();
-        const data = Array.isArray(json?.data) ? json.data : [];
-
-        setRows(
-          data.map((r, idx) => ({
-            key: r.employee_no || idx,
-            employee_no: r.employee_no ?? "-",
-            employee_fullname: r.employee_fullname ?? "-",
-            employee_email: r.employee_email ?? "",
-            attendance: r.attendance ?? "-",
-          }))
-        );
-
-        setServerTotalPages(Number(json?.totalPages) || 1);
-        setServerCount(Number(json?.count) || data.length || 0);
-
-        if (
-          Number(json?.totalPages) > 0 &&
-          currentPage > Number(json?.totalPages)
-        ) {
-          setCurrentPage(1);
-        }
-      } catch (e) {
-        if (e.name !== "AbortError") {
-          console.error("Fetch error:", e);
-          setFetchError("Failed to load data.");
-          setRows([]);
-          setServerTotalPages(1);
-          setServerCount(0);
-        }
-      } finally {
-        setIsLoading(false);
+      if (searchFilter.trim()) {
+        query.set("search", searchFilter.trim());
       }
-    };
 
-    run();
-    return () => controller.abort();
+      const res = await apiFetch(
+        `${API_URL}/v1/hris/employees/employees/active?${query.toString()}`,
+        {
+          credentials: "include",
+        },
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const json = await res.json();
+      const data = Array.isArray(json?.data) ? json.data : [];
+
+      setRows(
+        data.map((r, idx) => ({
+          key: r.employee_no || idx,
+          employee_no: r.employee_no ?? "-",
+          employee_fullname: r.employee_fullname ?? "-",
+          employee_email: r.employee_email ?? "",
+          attendance: r.attendance ?? "-",
+        })),
+      );
+
+      setServerTotalPages(Number(json?.totalPages) || 1);
+      setServerCount(Number(json?.count) || data.length || 0);
+    } catch (error) {
+      console.error("Fetch error:", error);
+      setFetchError("Failed to load attendance data.");
+      setRows([]);
+      setServerTotalPages(1);
+      setServerCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployees();
   }, [
     orgId,
     currentApiYear,
     currentApiMonth,
     currentPage,
-    searchFilter,
     pageSize,
     API_URL,
     token,
   ]);
 
-  /* -------------------- Helpers -------------------- */
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      setCurrentPage(1);
+      fetchEmployees();
+    }, 400);
+
+    return () => clearTimeout(delay);
+  }, [searchFilter]);
+
   const initials = (name) =>
     (name || "")
       .trim()
@@ -125,170 +124,268 @@ const ViewMonthendAttendance = ({ pageSize = 8, onRowClick }) => {
       .join("")
       .slice(0, 2) || "NA";
 
-  const attendancePill = (status, employee_no) => {
+  const completedCount = rows.filter(
+    (r) => String(r.attendance || "").toLowerCase() === "complete",
+  ).length;
+
+  const incompleteCount = rows.length - completedCount;
+
+  const goToAttendance = (employee) => {
+    const s = String(employee.attendance || "").toLowerCase();
+    const isComplete = s === "complete";
+
+    if (isComplete) return;
+
+    navigate(
+      `/view-attendance-in-out?employeeId=${employee.employee_no}&year=${displayYear}&month=${displayMonth}&org_id=${orgId}`,
+    );
+  };
+
+  const attendanceBadge = (status) => {
     const s = String(status || "").toLowerCase();
     const isComplete = s === "complete";
-    const cls = isComplete
-      ? "bg-green-100 text-green-700"
-      : "bg-gray-100 text-gray-700 cursor-pointer";
-    const label = isComplete ? "Complete" : "Incomplete";
-
-    const handleClick = () => {
-      if (!isComplete && prevYear && prevMonth) {
-        const year = encodeURIComponent(displayYear);
-        const month = encodeURIComponent(displayMonth);
-
-        navigate(
-          `/view-attendance-in-out?employeeId=${employee_no}&year=${year}&month=${month}&org_id=${orgId}`
-        );
-      }
-    };
 
     return (
       <span
-        className={`inline-block px-3 py-1 rounded-full text-sm ${cls}`}
-        onClick={handleClick}
+        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+          isComplete
+            ? "bg-green-100 text-green-700"
+            : "bg-amber-100 text-amber-700"
+        }`}
       >
-        {label}
+        {isComplete ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+        {isComplete ? "Complete" : "Incomplete"}
       </span>
     );
   };
 
-  /* -------------------- UI -------------------- */
   return (
-    <div className="mx-5 mt-5 font-montserrat">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <p className="text-[24px]">Payroll Navigation / Payroll Attendance</p>
-
-      </div>
-
-      <div className="shadow-lg p-5 rounded-lg bg-white w-[70%]">
-        <div className="flex items-end justify-between">
-          <p className="text-[20px] mb-4">
-            {`Showing ${serverCount} record(s) for ${displayYear}-${displayMonth}`}
+    <div className="min-h-screen bg-slate-50 p-6 font-montserrat">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-sm text-slate-500">
+            Payroll Navigation / Payroll Attendance
+          </p>
+          <h1 className="mt-1 text-2xl font-bold text-slate-900">
+            Month End Attendance
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Showing attendance for {displayYear}-{displayMonth}
           </p>
         </div>
 
-        {/* Filter Field (Search only) */}
-        <div className="flex flex-wrap gap-4 mb-4">
-          <div className="flex flex-col">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Search Employee
-            </label>
+        <button
+          onClick={fetchEmployees}
+          className="inline-flex items-center gap-2 rounded-lg border bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-blue-100 p-3 text-blue-700">
+              <Users size={22} />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Total Employees</p>
+              <p className="text-2xl font-bold text-slate-900">{serverCount}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-green-100 p-3 text-green-700">
+              <CheckCircle2 size={22} />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Completed</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {completedCount}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-amber-100 p-3 text-amber-700">
+              <CalendarDays size={22} />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Incomplete</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {incompleteCount}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Employee Attendance Status
+            </h2>
+            <p className="text-sm text-slate-500">
+              Click incomplete employees to review attendance.
+            </p>
+          </div>
+
+          <div className="relative w-full lg:w-80">
+            <Search
+              size={18}
+              className="absolute left-3 top-3 text-slate-400"
+            />
             <input
               type="text"
-              className="border border-gray-300 rounded px-3 py-2 w-64"
-              placeholder="Employee ID or Name"
               value={searchFilter}
-              onChange={(e) => {
-                setSearchFilter(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              placeholder="Search employee no or name..."
+              className="w-full rounded-xl border border-slate-300 py-3 pl-10 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </div>
         </div>
 
-        {/* Table */}
-        <div className="mt-5">
-          <table className="w-full border-collapse bg-white text-left text-sm text-gray-700">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[850px] text-left text-sm">
+            <thead className="bg-slate-100 text-xs uppercase text-slate-600">
               <tr>
-                <th className="px-6 py-3 font-medium text-gray-900">
-                  Employee ID
-                </th>
-                <th className="px-6 py-3 font-medium text-gray-900">
-                  Employee Name
-                </th>
-                <th className="px-6 py-3 font-medium text-gray-900">
-                  Attendances
-                </th>
+                <th className="px-5 py-4">Employee No</th>
+                <th className="px-5 py-4">Employee</th>
+                <th className="px-5 py-4">Email</th>
+                <th className="px-5 py-4">Attendance</th>
+                <th className="px-5 py-4 text-center">Action</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y">
               {isLoading ? (
                 <tr>
-                  <td colSpan={3} className="px-6 py-6 text-center">
-                    Loading...
+                  <td
+                    colSpan={5}
+                    className="px-5 py-10 text-center text-slate-500"
+                  >
+                    Loading employees...
                   </td>
                 </tr>
               ) : fetchError ? (
                 <tr>
                   <td
-                    colSpan={3}
-                    className="px-6 py-6 text-center text-red-600"
+                    colSpan={5}
+                    className="px-5 py-10 text-center text-red-600"
                   >
                     {fetchError}
                   </td>
                 </tr>
-              ) : rows.length > 0 ? (
-                rows.map((employee) => (
-                  <tr
-                    key={employee.key}
-                    className="hover:bg-blue-50 cursor-pointer"
-                    onClick={() => onRowClick?.(employee)}
-                  >
-                    <td className="px-6 py-4">{employee.employee_no}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="h-8 w-8 flex-shrink-0 rounded-full bg-blue-300 flex items-center justify-center text-white font-bold">
-                          {initials(employee.employee_fullname)}
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {employee.employee_fullname || "Unknown"}
-                          </div>
-                          {employee.employee_email && (
-                            <div className="text-xs text-gray-500">
-                              {employee.employee_email}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {attendancePill(
-                        employee.attendance,
-                        employee.employee_no
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
+              ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-6 py-6 text-center">
+                  <td
+                    colSpan={5}
+                    className="px-5 py-10 text-center text-slate-500"
+                  >
                     No records found.
                   </td>
                 </tr>
+              ) : (
+                rows.map((employee) => {
+                  const isComplete =
+                    String(employee.attendance || "").toLowerCase() ===
+                    "complete";
+
+                  return (
+                    <tr
+                      key={employee.key}
+                      onClick={() => goToAttendance(employee)}
+                      className={`transition ${
+                        isComplete
+                          ? "cursor-default bg-white"
+                          : "cursor-pointer hover:bg-blue-50"
+                      }`}
+                    >
+                      <td className="px-5 py-4 font-semibold text-slate-800">
+                        {employee.employee_no}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                            {initials(employee.employee_fullname)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-900">
+                              {employee.employee_fullname}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              Employee ID: {employee.employee_no}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 text-slate-600">
+                        {employee.employee_email || "—"}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {attendanceBadge(employee.attendance)}
+                      </td>
+
+                      <td className="px-5 py-4 text-center">
+                        <button
+                          disabled={isComplete}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            goToAttendance(employee);
+                          }}
+                          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                            isComplete
+                              ? "cursor-not-allowed bg-slate-100 text-slate-400"
+                              : "bg-blue-600 text-white hover:bg-blue-700"
+                          }`}
+                        >
+                          {isComplete ? "Done" : "Review"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between mt-4">
-          <button
-            className="px-4 py-2 bg-blue-500 rounded text-white disabled:opacity-50 hover:bg-blue-600"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage <= 1 || isLoading}
-          >
-            Previous
-          </button>
-
+        <div className="flex flex-col gap-3 border-t p-5 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
           <p>
-            Page {Math.min(currentPage, serverTotalPages)} of {serverTotalPages}
+            Page {Math.min(currentPage, serverTotalPages)} of {serverTotalPages}{" "}
+            · {serverCount} records
           </p>
 
-          <button
-            className="px-4 py-2 bg-blue-500 rounded text-white disabled:opacity-50 hover:bg-blue-600"
-            onClick={() =>
-              setCurrentPage((p) => Math.min(serverTotalPages, p + 1))
-            }
-            disabled={currentPage >= serverTotalPages || isLoading}
-          >
-            Next
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="inline-flex items-center gap-1 rounded-lg border px-4 py-2 disabled:opacity-50"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1 || isLoading}
+            >
+              <ChevronLeft size={16} />
+              Previous
+            </button>
+
+            <button
+              className="inline-flex items-center gap-1 rounded-lg border px-4 py-2 disabled:opacity-50"
+              onClick={() =>
+                setCurrentPage((p) => Math.min(serverTotalPages, p + 1))
+              }
+              disabled={currentPage >= serverTotalPages || isLoading}
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

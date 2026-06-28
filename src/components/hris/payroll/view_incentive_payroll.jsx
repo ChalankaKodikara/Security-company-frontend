@@ -73,10 +73,10 @@ export default function ViewIncentivePayroll() {
   // filters
   // ⭐ MODIFIED: Renamed employeeFilter to searchFilter and it now reads from "search" param
   const [searchFilter, setSearchFilter] = useState(
-    searchParams.get("search") || ""
+    searchParams.get("search") || "",
   );
   const [statusFilter, setStatusFilter] = useState(
-    searchParams.get("status") || ""
+    searchParams.get("status") || "",
   );
 
   // pagination (default page size 7)
@@ -130,7 +130,7 @@ export default function ViewIncentivePayroll() {
       "organization_id (from cookie)=",
       organization_id,
       "searchFilter=",
-      searchFilter // ⭐ MODIFIED: console log for searchFilter
+      searchFilter, // ⭐ MODIFIED: console log for searchFilter
     );
 
     // Prevent fetch if essential parameters are missing (including organization_id from cookie)
@@ -157,7 +157,7 @@ export default function ViewIncentivePayroll() {
           page: String(page),
           limit: String(limit),
           organization_id: organization_id, // Include organization_id from cookie in GET request params
-          payroll_group: "Ho",
+          payroll_group: "SECURITY",
         });
 
         // ⭐ MODIFIED: Include searchFilter as the "search" API parameter
@@ -168,7 +168,6 @@ export default function ViewIncentivePayroll() {
         console.log("  Fetching table data from URL:", fetchUrl);
 
         const res = await apiFetch(fetchUrl, {
-
           credentials: "include",
           signal: controller.signal,
         });
@@ -184,7 +183,7 @@ export default function ViewIncentivePayroll() {
         setTotalPages(Number(p?.totalPages) || 1);
 
         setButtonVisible(
-          typeof json?.buttonVisible === "string" ? json.buttonVisible : "no"
+          typeof json?.buttonVisible === "string" ? json.buttonVisible : "no",
         );
 
         const serverPage = Number(p?.page) || page;
@@ -250,7 +249,7 @@ export default function ViewIncentivePayroll() {
     // Prevent generation if essential parameters are missing or already calculating
     if (!year || !month || !organization_id || isCalculating) {
       console.log(
-        "  Skipping generate: Missing year, month, organization_id (from cookie), or already calculating."
+        "  Skipping generate: Missing year, month, organization_id (from cookie), or already calculating.",
       );
       return;
     }
@@ -273,7 +272,7 @@ export default function ViewIncentivePayroll() {
           method: "POST",
           credentials: "include",
           body: JSON.stringify(payload),
-        }
+        },
       );
 
       const json = await res.json().catch(() => ({}));
@@ -301,10 +300,10 @@ export default function ViewIncentivePayroll() {
     // Include organization_id in the navigation URL
     navigate(
       `/view-calculated-month-end-payroll?year=${encodeURIComponent(
-        year
+        year,
       )}&month=${encodeURIComponent(month)}&org_id=${encodeURIComponent(
-        organization_id
-      )}`
+        organization_id,
+      )}`,
     );
   };
 
@@ -415,7 +414,7 @@ export default function ViewIncentivePayroll() {
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs shrink-0 ${avatarBgClass(
-                          r.employee_fullname || r.employee_no
+                          r.employee_fullname || r.employee_no,
                         )}`}
                         title={r.employee_fullname}
                       >
@@ -438,7 +437,6 @@ export default function ViewIncentivePayroll() {
                   <td className="p-3">{renderStatus(r.overtime_status)}</td>
                   <td className="p-3">{renderStatus(r.allowances)}</td>
                   <td className="p-3">{renderStatus(r.deduction)}</td>
-
                 </tr>
               ))
             )}
@@ -487,7 +485,6 @@ export default function ViewIncentivePayroll() {
               >
                 Generate
               </button>
-
             </div>
           </div>
         </div>
@@ -500,12 +497,13 @@ export default function ViewIncentivePayroll() {
             {/* Progress track */}
             <div className="h-2 w-full bg-gray-200 rounded overflow-hidden mb-4">
               <div
-                className={`h-full rounded ${calcSuccess
-                  ? "bg-green-500"
-                  : calcError
-                    ? "bg-rose-500"
-                    : "bg-blue-500"
-                  }`}
+                className={`h-full rounded ${
+                  calcSuccess
+                    ? "bg-green-500"
+                    : calcError
+                      ? "bg-rose-500"
+                      : "bg-blue-500"
+                }`}
                 style={{
                   width: `${calcSuccess ? 100 : progress}%`,
                   transition: "width 400ms linear",
