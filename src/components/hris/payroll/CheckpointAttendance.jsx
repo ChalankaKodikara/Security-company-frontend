@@ -15,7 +15,7 @@ const CheckpointAttendance = () => {
   const [checkpoints, setCheckpoints] = useState([]);
   const [selectedCheckpoint, setSelectedCheckpoint] = useState("");
   const [downloadCheckpoint, setDownloadCheckpoint] = useState("");
-
+  const [checkpointSearch, setCheckpointSearch] = useState("");
   const [month, setMonth] = useState("");
   const [year, setYear] = useState("");
   const [downloadMonth, setDownloadMonth] = useState("");
@@ -76,7 +76,11 @@ const CheckpointAttendance = () => {
     fetchAttendanceUploads();
     fetchGeneratedInvoiceMonths();
   }, []);
-
+  const filteredDownloadCheckpoints = checkpoints.filter((checkpoint) =>
+    `${checkpoint.checkpoint_name} ${checkpoint.client_name}`
+      .toLowerCase()
+      .includes(checkpointSearch.toLowerCase()),
+  );
   const fetchCheckpoints = async () => {
     try {
       const response = await fetch(`${API_URL}/v1/hris/client/checkpoints`, {
@@ -514,23 +518,40 @@ const CheckpointAttendance = () => {
           </p>
 
           <label className="text-sm font-medium">Select Checkpoint</label>
+
           <div className="relative mt-2 mb-4">
             <Building2
               className="absolute left-3 top-3 text-slate-400"
               size={18}
             />
-            <select
-              value={downloadCheckpoint}
-              onChange={(e) => setDownloadCheckpoint(e.target.value)}
+
+            <input
+              list="checkpoint-options"
+              value={checkpointSearch}
+              onChange={(e) => {
+                const value = e.target.value;
+                setCheckpointSearch(value);
+
+                const selected = checkpoints.find(
+                  (checkpoint) =>
+                    `${checkpoint.checkpoint_name} - ${checkpoint.client_name}` ===
+                    value,
+                );
+
+                setDownloadCheckpoint(selected ? selected.id : "");
+              }}
+              placeholder="Search and select checkpoint..."
               className="w-full pl-10 pr-4 py-3 border rounded-lg outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="">Select Checkpoint</option>
+            />
+
+            <datalist id="checkpoint-options">
               {checkpoints.map((checkpoint) => (
-                <option key={checkpoint.id} value={checkpoint.id}>
-                  {checkpoint.checkpoint_name} - {checkpoint.client_name}
-                </option>
+                <option
+                  key={checkpoint.id}
+                  value={`${checkpoint.checkpoint_name} - ${checkpoint.client_name}`}
+                />
               ))}
-            </select>
+            </datalist>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
