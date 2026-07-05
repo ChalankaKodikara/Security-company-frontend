@@ -337,30 +337,52 @@ const ViewRegisteredMembers = () => {
       const d = json.data || {};
       setOfficialData({
         employee_no: d.employee_no ?? "",
+
+        organization_id: d.organization_id ?? "",
+        organization_name: d.organization_details?.organization_name ?? "",
+        organization_code: d.organization_details?.code ?? "",
+
         working_office: d.working_office ?? "",
+        working_office_name: d.workingOfficeDetails?.name ?? "",
+
         branch_id: d.branch ?? "",
         branch_name: d.branch_details?.branch ?? "",
+
         employment_type: d.employment_type ?? "",
+        employment_type_name: d.employmentTypeDetails?.type_name ?? "",
+
         date_of_appointment: d.date_of_appointment ?? "",
         employee_basic_salary: d.employee_basic_salary ?? "",
         employee_active_status: d.employee_active_status ?? "",
+
         department_designation_id: d.department_designation_id ?? "",
+        designation_title: d.designation?.title ?? "",
+
         grade_id: d.grade_id ?? "",
         grade_name: d.grade_details?.grade_name ?? "",
-        working_office_name: d.workingOfficeDetails?.name ?? "",
-        employment_type_name: d.employmentTypeDetails?.type_name ?? "",
-        designation_title: d.designation?.title ?? "",
-        designated_mails: d.designated_mails ?? [],
+
         epf_no: d.epf_no ?? "",
+        occupation_classification_grade:
+          d.occupation_classification_grade ?? "",
+
+        employee_category: d.employee_category ?? "",
+        payroll_group: d.payroll_group ?? "",
+        payroll_scheme: d.payroll_scheme ?? "",
+
+        checkpoint_id: d.checkpoint_id ?? "",
+        checkpoint_name: d.checkpoint_details?.checkpoint_name ?? "",
+        checkpoint_address: d.checkpoint_details?.address ?? "",
+        checkpoint_client_name: d.checkpoint_details?.client_name ?? "",
+        per_shift_rate: d.checkpoint_details?.per_shift_rate ?? "",
+        ot_hour_rate: d.checkpoint_details?.ot_hour_rate ?? "",
+
+        designated_mails: d.designated_mails ?? [],
+
         supervisor_name: d.supervisor?.supervisor_fullname ?? "",
         supervisor_id: d.supervisor?.id ?? d.supervisor_id ?? "",
+
         timetable_id: d.timetable_id ?? "",
         timetable_name: d.timetable_name ?? "",
-        organization_id: d.organization_id ?? d.Organization?.id ?? "",
-        employee_category: d.employee_category ?? "",
-        payroll_location_type: d.payroll_location_type ?? d.location_type ?? "",
-        location_type: d.location_type ?? "",
-
       });
     } catch (err) {
       console.error("Error fetching official data:", err);
@@ -497,6 +519,12 @@ const ViewRegisteredMembers = () => {
       console.error("Error updating member status:", error);
     }
   };
+  const ViewField = ({ label, value }) => (
+    <div>
+      <label className={labelStyle}>{label}</label>
+      <input className={inputStyle} value={value || ""} disabled />
+    </div>
+  );
   const downloadBankFile = async (s3Url, suggestedName) => {
     if (!s3Url) return;
 
@@ -913,157 +941,113 @@ const ViewRegisteredMembers = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelStyle}>Employee Number</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.employee_no || ""}
-                  disabled
-                />
-              </div>
+              <ViewField
+                label="Employee Number"
+                value={officialData?.employee_no}
+              />
+              <ViewField
+                label="Organization"
+                value={officialData?.organization_name}
+              />
+              <ViewField
+                label="Working Office"
+                value={
+                  officialData?.working_office_name ||
+                  officialData?.working_office
+                }
+              />
+              <ViewField label="Branch" value={officialData?.branch_name} />
+              <ViewField
+                label="Employment Type"
+                value={
+                  officialData?.employment_type_name ||
+                  officialData?.employment_type
+                }
+              />
+              <ViewField
+                label="Designation"
+                value={
+                  officialData?.designation_title ||
+                  officialData?.department_designation_id
+                }
+              />
+              <ViewField label="Grade" value={officialData?.grade_name} />
+              <ViewField label="E.P.F No" value={officialData?.epf_no} />
 
-              <div>
-                <label className={labelStyle}>Working Office</label>
-                <input
-                  className={inputStyle}
-                  value={
-                    officialData?.working_office_name ||
-                    officialData?.working_office ||
-                    ""
-                  }
-                  disabled
-                />{" "}
-              </div>
+              <ViewField
+                label="Date of Appointment"
+                value={officialData?.date_of_appointment}
+              />
+              <ViewField
+                label="Basic Salary"
+                value={officialData?.employee_basic_salary}
+              />
+              <ViewField
+                label="Employment Status"
+                value={officialData?.employee_active_status}
+              />
+              <ViewField
+                label="Employee Category"
+                value={officialData?.employee_category}
+              />
 
-              <div>
-                <label className={labelStyle}>Branch</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.branch_name || ""}
-                  disabled
-                />
-              </div>
+              <ViewField
+                label="Payroll Group"
+                value={officialData?.payroll_group}
+              />
+              <ViewField
+                label="Payroll Scheme"
+                value={officialData?.payroll_scheme}
+              />
+              <ViewField
+                label="Occupation Grade"
+                value={officialData?.occupation_classification_grade}
+              />
+              <ViewField
+                label="Supervisor"
+                value={officialData?.supervisor_name}
+              />
 
-              <div>
-                <label className={labelStyle}>Employment Type</label>
-                <input
-                  className={inputStyle}
-                  value={
-                    officialData?.employment_type_name ||
-                    officialData?.employment_type ||
-                    ""
-                  }
-                  disabled
-                />
-              </div>
+              <ViewField
+                label="TimeTable Name"
+                value={officialData?.timetable_name}
+              />
 
-              <div>
-                <label className={labelStyle}>Employee Category</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.employee_category || ""}
-                  disabled
-                />
-              </div>
+              {officialData?.payroll_group === "SECURITY" && (
+                <>
+                  <ViewField
+                    label="Checkpoint"
+                    value={officialData?.checkpoint_name}
+                  />
+                  <ViewField
+                    label="Checkpoint Client"
+                    value={officialData?.checkpoint_client_name}
+                  />
+                  <ViewField
+                    label="Checkpoint Address"
+                    value={officialData?.checkpoint_address}
+                  />
+                  <ViewField
+                    label="Per Shift Rate"
+                    value={officialData?.per_shift_rate}
+                  />
+                  <ViewField
+                    label="OT Hour Rate"
+                    value={officialData?.ot_hour_rate}
+                  />
+                </>
+              )}
 
-              <div>
-                <label className={labelStyle}>Supervisor</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.supervisor_name || ""}
-                  disabled
-                />
-              </div>
-
-              <div>
-                <label className={labelStyle}>Date of Appointment</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.date_of_appointment || ""}
-                  disabled
-                />
-              </div>
-
-              <div>
-                <label className={labelStyle}>Basic Salary</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.employee_basic_salary || ""}
-                  disabled
-                />
-              </div>
-
-              <div>
-                <label className={labelStyle}>Employment Status</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.employee_active_status || ""}
-                  disabled
-                />
-              </div>
-
-              <div>
+              <div className="col-span-2">
                 <label className={labelStyle}>Designated Mails</label>
                 <input
                   className={inputStyle}
                   value={
                     Array.isArray(officialData?.designated_mails)
                       ? officialData.designated_mails
-                        .map((m) => m.designated_mail)
-                        .join(", ")
+                          .map((m) => m.designated_mail)
+                          .join(", ")
                       : ""
-                  }
-                  disabled
-                />
-              </div>
-
-              <div>
-                <label className={labelStyle}> Designation</label>
-                <input
-                  className={inputStyle}
-                  value={
-                    officialData?.designation_title ||
-                    officialData?.department_designation_id ||
-                    ""
-                  }
-                  disabled
-                />
-              </div>
-
-              <div>
-                <label className={labelStyle}>Grade</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.grade_name || ""}
-                  disabled
-                />
-              </div>
-
-              <div>
-                <label className={labelStyle}>E.P.F No</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.epf_no || ""}
-                  disabled
-                />
-              </div>
-
-              <div>
-                <label className={labelStyle}>TimeTable Name</label>
-                <input
-                  className={inputStyle}
-                  value={officialData?.timetable_name || ""}
-                  disabled
-                />
-              </div>
-              <div>
-                <label className={labelStyle}>Payroll Location Type</label>
-                <input
-                  className={inputStyle}
-                  value={
-                    officialData?.payroll_location_type ||
-                    officialData?.location_type ||
-                    ""
                   }
                   disabled
                 />
@@ -1269,7 +1253,7 @@ const ViewRegisteredMembers = () => {
 
                 <div className="space-y-3 w-full">
                   {Array.isArray(bankData?.bank_files) &&
-                    bankData.bank_files.length > 0 ? (
+                  bankData.bank_files.length > 0 ? (
                     bankData.bank_files.map((file) => {
                       const parts = file.s3_url.split("/");
                       const fileName = parts[parts.length - 1]; // e.g. 1759826141263_test_infB.pdf
@@ -1511,7 +1495,7 @@ const ViewRegisteredMembers = () => {
               </div>
 
               {Array.isArray(personalData?.employment_history) &&
-                personalData.employment_history.length > 0 ? (
+              personalData.employment_history.length > 0 ? (
                 <div className="relative pl-12" ref={timelineRef}>
                   {/* Gray vertical rail */}
                   <span className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-300" />
@@ -1547,10 +1531,11 @@ const ViewRegisteredMembers = () => {
                             className="relative flex items-start"
                           >
                             <span
-                              className={`absolute left-3 top-0 h-6 w-6 flex items-center justify-center rounded-full border-2 ${showTick
-                                ? "bg-blue-500 border-blue-500 text-white"
-                                : "bg-white border-gray-300 text-gray-400"
-                                }`}
+                              className={`absolute left-3 top-0 h-6 w-6 flex items-center justify-center rounded-full border-2 ${
+                                showTick
+                                  ? "bg-blue-500 border-blue-500 text-white"
+                                  : "bg-white border-gray-300 text-gray-400"
+                              }`}
                             >
                               {showTick ? "✓" : ""}
                             </span>
@@ -1582,10 +1567,11 @@ const ViewRegisteredMembers = () => {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 text-sm px-4 py-1.5 rounded-md font-medium ${activeTab === tab.key
-                  ? "bg-blue-400 text-white"
-                  : "text-gray-400"
-                  }`}
+                className={`flex items-center gap-2 text-sm px-4 py-1.5 rounded-md font-medium ${
+                  activeTab === tab.key
+                    ? "bg-blue-400 text-white"
+                    : "text-gray-400"
+                }`}
               >
                 {tab.key === "personal" && (
                   <FiUserCheck className="text-base" />
@@ -1685,7 +1671,7 @@ const ViewRegisteredMembers = () => {
                       } else {
                         toast.error(
                           json.message ||
-                          "Failed to update employment history.",
+                            "Failed to update employment history.",
                         );
                       }
                     } catch (err) {

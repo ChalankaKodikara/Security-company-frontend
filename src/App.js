@@ -215,7 +215,8 @@ import ViewIncentiveDeduction from "./components/hris/payroll/view_incentive_ded
 import ViewIncentiveSalaryAdvance from "./components/hris/payroll/view_incentive_salary_advance.jsx";
 import ViewIncentivePayroll from "./components/hris/payroll/view_incentive_payroll.jsx";
 import CheckpointAttendance from "./components/hris/payroll/CheckpointAttendance.jsx";
-
+import ClientManagement from "./components/hris/payroll/ClientManagement.jsx";
+import QuickOnboardNew from "./components/hris/emp_management/employee_quick_onboard/quick-onboard-new.jsx";
 const AppContent = ({
   isSidebarOpen,
   toggleSidebar,
@@ -749,6 +750,8 @@ const AppContent = ({
             path="/checkpoint-attendance"
             element={<CheckpointAttendance />}
           />{" "}
+          <Route path="/client-management" element={<ClientManagement />} />{" "}
+          <Route path="/quick-onboarding" element={<QuickOnboardNew />} />{" "}
         </Routes>
       </div>
     </div>

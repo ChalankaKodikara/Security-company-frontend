@@ -22,7 +22,7 @@ const Emp_Management = () => {
   });
   const token = Cookies.get("accessToken");
 
-  const [orgInfo, setOrgInfo] = useState(null); 
+  const [orgInfo, setOrgInfo] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,13 +34,16 @@ const Emp_Management = () => {
           return;
         }
 
-        const res = await fetch(`${API_URL}/v1/hris/organizations/organizational-structure`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+        const res = await fetch(
+          `${API_URL}/v1/hris/organizations/organizational-structure`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
           },
-        });
+        );
 
         const json = await res.json();
 
@@ -57,7 +60,6 @@ const Emp_Management = () => {
 
     fetchOrgStructure();
   }, [API_URL]);
-
 
   // 🔹 Function to handle Employee Onboarding click
   const handleOnboardClick = () => {
@@ -79,7 +81,7 @@ const Emp_Management = () => {
       bgColor: "from-blue-500 to-blue-600",
       iconBg: "bg-gradient-to-br from-blue-500 to-blue-600",
       icon: <FaUsers className="text-white text-3xl" />,
-      onClick: handleOnboardClick, 
+      onClick: handleOnboardClick,
       description: "Add new team members",
       permission: 1000,
     },
@@ -125,6 +127,17 @@ const Emp_Management = () => {
       icon: <FaMobile className="text-white text-3xl" />,
       onClick: () => navigate("/access-control"),
       description: "Employee session management",
+      permission: 1027,
+    },
+    {
+      title: "Quick Onboarding",
+      count: data.allowanceCount,
+      label: "Employee session management",
+      bgColor: "from-red-500 to-red-600",
+      iconBg: "bg-gradient-to-br from-red-500 to-red-600",
+      icon: <FaMobile className="text-white text-3xl" />,
+      onClick: () => navigate("/quick-onboarding"),
+      description: "Quick employee onboarding process",
       permission: 1027,
     },
   ];

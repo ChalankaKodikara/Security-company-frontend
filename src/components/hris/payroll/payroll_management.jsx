@@ -108,16 +108,16 @@ const PayrollManagement = () => {
       permissionId: 1008,
       description: "Process salary advances",
     },
-    // {
-    //   title: "Cola Allowance",
-    //   label: "Assigned Employees",
-    //   gradient: "from-teal-500 to-teal-600",
-    //   iconBg: "bg-white/20",
-    //   icon: <LiaMoneyBillWaveSolid className="text-white text-3xl" />,
-    //   onClick: () => navigate("/cola-allowance"),
-    //   permissionId: 1009,
-    //   description: "Manage COLA benefits",
-    // },
+    {
+      title: "Client Management",
+      label: "Managed Checkpoint Clients",
+      gradient: "from-teal-500 to-teal-600",
+      iconBg: "bg-white/20",
+      icon: <LiaMoneyBillWaveSolid className="text-white text-3xl" />,
+      onClick: () => navigate("/client-management"),
+      permissionId: 1009,
+      description: "Manage client relationships",
+    },
 
     // {
     //   title: "Spectacles Allowance",
