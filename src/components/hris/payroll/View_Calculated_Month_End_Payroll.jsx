@@ -86,9 +86,12 @@ export default function View_Calculated_Month_End_Payroll() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiFetch(`${API_URL}/v1/hris/organization`, {
-          credentials: "include",
-        });
+        const res = await apiFetch(
+          `${API_URL}/v1/hris/organizations/organization`,
+          {
+            credentials: "include",
+          },
+        );
         const json = await res.json();
         if (Array.isArray(json?.data)) {
           setOrganizationOptions(json.data);

@@ -12,7 +12,12 @@ import {
   Search,
   Calendar,
   Filter,
+  FileText,
+  X,
+  Check,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { apiFetch } from "../../../utils/apiClient";
 
 const getInitials = (fullName = "") => {
@@ -40,6 +45,87 @@ const avatarBgClass = (seed = "") => {
   return palette[hash % palette.length];
 };
 
+const FIXED_EXPORT_COLUMNS = [
+  { key: "employee_no", label: "Employee No", type: "text" },
+  { key: "employee_fullname", label: "Employee Name", type: "text" },
+  { key: "employee_category", label: "Category", type: "text" },
+  { key: "payroll_type", label: "Payroll Type", type: "text" },
+  { key: "completed_shifts", label: "Completed Shifts", type: "number" },
+  { key: "payable_basic_salary", label: "Shift Pay", type: "money" },
+  { key: "overtime_pay", label: "OT Pay", type: "money" },
+  { key: "gross_pay", label: "Gross Pay", type: "money" },
+  { key: "epf_base", label: "EPF Base", type: "money" },
+  { key: "salary_advance", label: "Salary Advance", type: "money" },
+  { key: "payroll_status", label: "Payroll Status", type: "text" },
+  { key: "epf_8", label: "EPF 8%", type: "money" },
+  { key: "epf_12", label: "EPF 12%", type: "money" },
+  { key: "etf_3", label: "ETF 3%", type: "money" },
+  { key: "total_earnings", label: "Total Earnings", type: "money" },
+  { key: "net_pay", label: "Net Pay", type: "money" },
+];
+
+const NON_EXPORTABLE_COLUMNS = new Set([
+  "id",
+  "organization_id",
+  "month",
+  "year",
+  "employee_table_no",
+  "employee_email",
+  "employee_calling_name",
+  "job_title",
+  "organization_name",
+  "organization_code",
+  "generated_at",
+  "net_salary",
+]);
+
+const toNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const round2 = (value) => Number(toNumber(value).toFixed(2));
+
+const humanizeColumn = (key) =>
+  String(key)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+
+const hasMeaningfulValue = (value) => {
+  if (value == null || value === "") return false;
+
+  const number = Number(value);
+  if (Number.isFinite(number)) return number !== 0;
+
+  const normalized = String(value).trim().toLowerCase();
+  return normalized !== "" && normalized !== "0" && normalized !== "0.00";
+};
+
+const getOptionalExportColumns = (data) => {
+  if (!Array.isArray(data) || data.length === 0) return [];
+
+  const fixedKeys = new Set(FIXED_EXPORT_COLUMNS.map((column) => column.key));
+  const keys = new Set();
+
+  data.forEach((row) => {
+    Object.keys(row || {}).forEach((key) => keys.add(key));
+  });
+
+  return Array.from(keys)
+    .filter((key) => !fixedKeys.has(key))
+    .filter((key) => !NON_EXPORTABLE_COLUMNS.has(key))
+    .filter((key) => data.some((row) => hasMeaningfulValue(row?.[key])))
+    .map((key) => ({
+      key,
+      label: humanizeColumn(key),
+      type: data
+        .filter((row) => hasMeaningfulValue(row?.[key]))
+        .every((row) => Number.isFinite(Number(row?.[key])))
+        ? "money"
+        : "text",
+    }));
+};
+
 export default function ModernPayrollView() {
   const API_URL = process.env.REACT_APP_FRONTEND_URL;
 
@@ -62,6 +148,12 @@ export default function ModernPayrollView() {
   const [limit, setLimit] = useState(10);
   const [expandedRow, setExpandedRow] = useState(null);
 
+  const [checkpoints, setCheckpoints] = useState([]);
+  const [selectedCheckpointIds, setSelectedCheckpointIds] = useState([]);
+  const [checkpointSearch, setCheckpointSearch] = useState("");
+  const [checkpointDropdownOpen, setCheckpointDropdownOpen] = useState(false);
+  const [isLoadingCheckpoints, setIsLoadingCheckpoints] = useState(false);
+
   const [year, month] = useMemo(() => {
     const [y, m] = ym.split("-");
     return [y, m?.padStart(2, "0")];
@@ -74,21 +166,75 @@ export default function ModernPayrollView() {
   const [fetchError, setFetchError] = useState("");
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
+  const [monthlyNetSalary, setMonthlyNetSalary] = useState(0);
+  const [monthlyEmployeeCount, setMonthlyEmployeeCount] = useState(0);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   useEffect(() => {
     setSymbol(Cookies.get("symbol") || "Rs.");
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    const fetchCheckpoints = async () => {
+      setIsLoadingCheckpoints(true);
+
+      try {
+        const response = await apiFetch(
+          `${API_URL}/v1/hris/client/checkpoints`,
+          { credentials: "include" },
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const json = await response.json();
+        const list = Array.isArray(json?.checkpoints) ? json.checkpoints : [];
+
+        if (active) {
+          setCheckpoints(
+            list
+              .filter((checkpoint) => Number(checkpoint?.is_active) === 1)
+              .sort((a, b) =>
+                String(a?.checkpoint_name || "").localeCompare(
+                  String(b?.checkpoint_name || ""),
+                ),
+              ),
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load checkpoints:", error);
+        if (active) {
+          setCheckpoints([]);
+          toast.error("Failed to load checkpoints");
+        }
+      } finally {
+        if (active) setIsLoadingCheckpoints(false);
+      }
+    };
+
+    fetchCheckpoints();
+
+    return () => {
+      active = false;
+    };
+  }, [API_URL]);
+
+  useEffect(() => {
     const params = new URLSearchParams();
     params.set("ym", ym);
     if (search) params.set("search", search);
+    if (selectedCheckpointIds.length > 0) {
+      params.set("checkpoint_ids", selectedCheckpointIds.join(","));
+    }
     params.set("page", String(page));
     params.set("limit", String(limit));
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", newUrl);
-  }, [ym, search, page, limit]);
+  }, [ym, search, page, limit, selectedCheckpointIds]);
 
   const money = (v) => {
     if (v == null || v === "") return "—";
@@ -100,6 +246,70 @@ export default function ModernPayrollView() {
       maximumFractionDigits: 2,
     })}`;
   };
+
+  const fetchAllPayrollRows = async () => {
+    const params = new URLSearchParams({
+      year,
+      month,
+      payroll_type: "SECURITY",
+      page: "1",
+      limit: "100000",
+    });
+
+    if (search.trim()) {
+      params.set("search", search.trim());
+    }
+
+    if (selectedCheckpointIds.length > 0) {
+      params.set("checkpoint_ids", selectedCheckpointIds.join(","));
+    }
+
+    const response = await apiFetch(
+      `${API_URL}/v1/hris/payroll/genarated-payroll-by-month-and-year?${params.toString()}`,
+      { credentials: "include" },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const json = await response.json();
+    return Array.isArray(json?.data) ? json.data : [];
+  };
+
+  useEffect(() => {
+    if (!year || !month) return;
+
+    let active = true;
+
+    const loadMonthlyTotal = async () => {
+      try {
+        const allRows = await fetchAllPayrollRows();
+        if (!active) return;
+
+        setMonthlyEmployeeCount(allRows.length);
+        setMonthlyNetSalary(
+          round2(
+            allRows.reduce(
+              (sum, row) => sum + toNumber(row.net_pay ?? row.net_salary),
+              0,
+            ),
+          ),
+        );
+      } catch (error) {
+        if (!active) return;
+        console.error("Failed to calculate monthly salary total:", error);
+        setMonthlyEmployeeCount(0);
+        setMonthlyNetSalary(0);
+      }
+    };
+
+    loadMonthlyTotal();
+
+    return () => {
+      active = false;
+    };
+  }, [API_URL, year, month, search, selectedCheckpointIds]);
 
   useEffect(() => {
     if (!year || !month) return;
@@ -121,6 +331,10 @@ export default function ModernPayrollView() {
 
         if (search.trim()) {
           params.set("search", search.trim());
+        }
+
+        if (selectedCheckpointIds.length > 0) {
+          params.set("checkpoint_ids", selectedCheckpointIds.join(","));
         }
 
         const res = await apiFetch(
@@ -158,193 +372,296 @@ export default function ModernPayrollView() {
     fetchData();
 
     return () => controller.abort();
-  }, [API_URL, year, month, search, page, limit]);
+  }, [API_URL, year, month, search, page, limit, selectedCheckpointIds]);
 
   const customColumns = useMemo(() => {
     if (!rows || rows.length === 0) {
       return { allowances: [], deductions: [], other: [] };
     }
 
-    const skip = new Set([
-      "id",
-      "organization_id",
-      "month",
-      "year",
-      "employee_no",
-      "employee_table_no",
-      "employee_fullname",
-      "employee_email",
-      "employee_calling_name",
-      "job_title",
-      "organization_name",
-      "organization_code",
-      "generated_at",
+    const fixedAndHidden = new Set([
+      ...FIXED_EXPORT_COLUMNS.map((column) => column.key),
+      ...NON_EXPORTABLE_COLUMNS,
       "basic_salary",
-      "payable_basic_salary",
-      "completed_shifts",
       "extra_shift_pay",
-      "overtime_pay",
       "cola",
       "total_allowances",
       "total_deductions",
-      "gross_pay",
-      "total_earnings",
-      "net_pay",
-      "net_salary",
-      "epf_8",
-      "epf_12",
-      "etf_3",
-      "payroll_type",
-      "payroll_status",
-      "employee_category",
+      "calculated_nopay",
       "payroll_scheme",
       "payroll_location_type",
     ]);
+
+    const keys = new Set();
+    rows.forEach((row) => {
+      Object.keys(row || {}).forEach((key) => keys.add(key));
+    });
 
     const allowances = [];
     const deductions = [];
     const other = [];
 
-    Object.keys(rows[0]).forEach((key) => {
-      if (skip.has(key)) return;
+    Array.from(keys)
+      .filter((key) => !fixedAndHidden.has(key))
+      .filter((key) => rows.some((row) => hasMeaningfulValue(row?.[key])))
+      .forEach((key) => {
+        const label = humanizeColumn(key);
 
-      const label = key
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-
-      if (key.startsWith("allowance_")) {
-        allowances.push({ key, label: label.replace("Allowance ", "") });
-      } else if (key.startsWith("deduction_")) {
-        deductions.push({ key, label: label.replace("Deduction ", "") });
-      } else {
-        other.push({ key, label });
-      }
-    });
+        if (key.startsWith("allowance_")) {
+          allowances.push({ key, label: label.replace("Allowance ", "") });
+        } else if (key.startsWith("deduction_")) {
+          deductions.push({ key, label: label.replace("Deduction ", "") });
+        } else {
+          other.push({ key, label });
+        }
+      });
 
     return { allowances, deductions, other };
   }, [rows]);
 
+  const buildTotalRow = (data, columns) => {
+    const totalRow = {};
+
+    columns.forEach((column) => {
+      if (column.key === "employee_fullname") {
+        totalRow[column.key] = "MONTH TOTAL";
+      } else if (column.key === "employee_no") {
+        totalRow[column.key] = `${data.length} Employees`;
+      } else if (column.key === "payroll_status") {
+        totalRow[column.key] = "-";
+      } else if (column.type === "money" || column.type === "number") {
+        totalRow[column.key] = round2(
+          data.reduce((sum, row) => {
+            const value =
+              column.key === "net_pay"
+                ? (row.net_pay ?? row.net_salary)
+                : row[column.key];
+            return sum + toNumber(value);
+          }, 0),
+        );
+      } else {
+        totalRow[column.key] = "";
+      }
+    });
+
+    return totalRow;
+  };
+
+  const formatExportValue = (row, column) => {
+    const rawValue =
+      column.key === "net_pay"
+        ? (row.net_pay ?? row.net_salary)
+        : row[column.key];
+
+    if (column.type === "money") {
+      return toNumber(rawValue).toFixed(2);
+    }
+
+    if (column.type === "number") {
+      return round2(rawValue).toString();
+    }
+
+    return rawValue == null ? "" : String(rawValue);
+  };
+
   const handleExportCSV = async () => {
     try {
-      const params = new URLSearchParams({
-        year,
-        month,
-        payroll_type: "SECURITY",
-      });
-
-      if (search.trim()) {
-        params.set("search", search.trim());
-      }
-
-      const res = await apiFetch(
-        `${API_URL}/v1/hris/payroll/genarated-payroll-by-month-and-year?${params.toString()}`,
-        {
-          credentials: "include",
-        },
-      );
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const json = await res.json();
-      const allRows = Array.isArray(json?.data) ? json.data : [];
+      const allRows = await fetchAllPayrollRows();
 
       if (!allRows.length) {
         toast.warn("No data available to export");
         return;
       }
 
-      const skip = new Set([
-        "id",
-        "organization_id",
-        "month",
-        "year",
-        "organization_name",
-        "organization_code",
-        "generated_at",
-        "employee_calling_name",
-        "job_title",
-        "employee_table_no",
-      ]);
+      const optionalColumns = getOptionalExportColumns(allRows);
+      const columns = [...FIXED_EXPORT_COLUMNS, ...optionalColumns];
+      const totalRow = buildTotalRow(allRows, columns);
+      const exportRows = [...allRows, totalRow];
 
-      const allColumns = [
-        { key: "employee_no", label: "Employee No" },
-        { key: "employee_fullname", label: "Employee Name" },
-        { key: "employee_email", label: "Email" },
-        { key: "employee_category", label: "Category" },
-        { key: "payroll_type", label: "Payroll Type" },
-        { key: "completed_shifts", label: "Completed Shifts" },
-        { key: "payable_basic_salary", label: "Shift Pay" },
-        { key: "overtime_pay", label: "OT Pay" },
-        { key: "extra_shift_pay", label: "Extra Shift Pay" },
-        { key: "basic_salary", label: "Basic Salary" },
-        { key: "gross_pay", label: "Gross Pay" },
-      ];
-
-      Object.keys(allRows[0]).forEach((key) => {
-        if (
-          !skip.has(key) &&
-          !allColumns.some((c) => c.key === key) &&
-          ![
-            "total_allowances",
-            "total_deductions",
-            "total_earnings",
-            "net_pay",
-            "net_salary",
-            "epf_8",
-            "epf_12",
-            "etf_3",
-          ].includes(key)
-        ) {
-          allColumns.push({
-            key,
-            label: key
-              .replace(/_/g, " ")
-              .replace(/\b\w/g, (c) => c.toUpperCase()),
-          });
-        }
-      });
-
-      allColumns.push(
-        { key: "total_allowances", label: "Total Allowances" },
-        { key: "total_deductions", label: "Total Deductions" },
-        { key: "epf_8", label: "EPF 8%" },
-        { key: "epf_12", label: "EPF 12%" },
-        { key: "etf_3", label: "ETF 3%" },
-        { key: "total_earnings", label: "Total Earnings" },
-        { key: "net_pay", label: "Net Pay" },
-      );
-
-      const csvEscape = (val) => {
-        const s = val == null ? "" : String(val);
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      const csvEscape = (value) => {
+        const stringValue = value == null ? "" : String(value);
+        return /[",\n]/.test(stringValue)
+          ? `"${stringValue.replace(/"/g, '""')}"`
+          : stringValue;
       };
 
-      const toFixed2 = (v) => {
-        if (v == null || v === "") return "";
-        const num = Number(v);
-        return Number.isFinite(num) ? num.toFixed(2) : String(v);
-      };
+      const headerLine = columns
+        .map((column) => csvEscape(column.label))
+        .join(",");
 
-      const headerLine = allColumns.map((c) => csvEscape(c.label)).join(",");
-      const lines = allRows.map((r) =>
-        allColumns.map((c) => csvEscape(toFixed2(r[c.key]))).join(","),
+      const lines = exportRows.map((row) =>
+        columns
+          .map((column) => csvEscape(formatExportValue(row, column)))
+          .join(","),
       );
 
-      const csv = "\uFEFF" + [headerLine, ...lines].join("\n");
+      const csv = `\uFEFF${[headerLine, ...lines].join("\n")}`;
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const fileName = `security-payroll-${year}-${month}.csv`;
+      const link = document.createElement("a");
 
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(link.href);
 
-      toast.success(`Exported ${allRows.length} records`);
-    } catch (err) {
-      console.error(err);
+      toast.success(`Exported ${allRows.length} payroll records`);
+    } catch (error) {
+      console.error(error);
       toast.error("Failed to export CSV");
     }
+  };
+
+  const handleExportPDF = async () => {
+    setIsExportingPDF(true);
+
+    try {
+      const allRows = await fetchAllPayrollRows();
+
+      if (!allRows.length) {
+        toast.warn("No data available to export");
+        return;
+      }
+
+      const optionalColumns = getOptionalExportColumns(allRows);
+      const columns = [...FIXED_EXPORT_COLUMNS, ...optionalColumns];
+      const totalRow = buildTotalRow(allRows, columns);
+      const tableRows = [...allRows, totalRow].map((row) =>
+        columns.map((column) => formatExportValue(row, column)),
+      );
+
+      const document = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a3",
+      });
+
+      const monthLabel = new Date(
+        Number(year),
+        Number(month) - 1,
+        1,
+      ).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+      const totalNetPay = round2(
+        allRows.reduce(
+          (sum, row) => sum + toNumber(row.net_pay ?? row.net_salary),
+          0,
+        ),
+      );
+
+      document.setFont("helvetica", "bold");
+      document.setFontSize(16);
+      document.text("Security Payroll Report", 14, 15);
+
+      document.setFont("helvetica", "normal");
+      document.setFontSize(9);
+      document.text(`Payroll Month: ${monthLabel}`, 14, 22);
+      document.text(`Employees: ${allRows.length}`, 14, 27);
+      document.text(
+        `Total Salary for Month: ${symbol} ${totalNetPay.toLocaleString(
+          undefined,
+          {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          },
+        )}`,
+        14,
+        32,
+      );
+
+      autoTable(document, {
+        startY: 38,
+        head: [columns.map((column) => column.label)],
+        body: tableRows,
+        theme: "grid",
+        margin: { left: 8, right: 8, bottom: 12 },
+        styles: {
+          font: "helvetica",
+          fontSize: columns.length > 20 ? 4.5 : 5.5,
+          cellPadding: 1.1,
+          overflow: "linebreak",
+          valign: "middle",
+          lineWidth: 0.1,
+        },
+        headStyles: {
+          fillColor: [30, 64, 175],
+          textColor: 255,
+          fontStyle: "bold",
+          halign: "center",
+        },
+        didParseCell: (data) => {
+          const isTotalRow = data.row.index === tableRows.length - 1;
+
+          if (isTotalRow && data.section === "body") {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = [226, 232, 240];
+          }
+
+          const column = columns[data.column.index];
+          if (column?.type === "money" || column?.type === "number") {
+            data.cell.styles.halign = "right";
+          }
+        },
+        didDrawPage: () => {
+          const pageCount = document.getNumberOfPages();
+          document.setFontSize(7);
+          document.setTextColor(100);
+          document.text(
+            `Page ${pageCount}`,
+            document.internal.pageSize.getWidth() - 20,
+            document.internal.pageSize.getHeight() - 6,
+          );
+        },
+      });
+
+      document.save(`security-payroll-${year}-${month}.pdf`);
+      toast.success(`PDF exported with ${allRows.length} payroll records`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to export PDF");
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  const filteredCheckpoints = useMemo(() => {
+    const keyword = checkpointSearch.trim().toLowerCase();
+
+    if (!keyword) return checkpoints;
+
+    return checkpoints.filter((checkpoint) =>
+      [checkpoint?.checkpoint_name, checkpoint?.address, checkpoint?.id].some(
+        (value) =>
+          String(value || "")
+            .toLowerCase()
+            .includes(keyword),
+      ),
+    );
+  }, [checkpoints, checkpointSearch]);
+
+  const selectedCheckpoints = useMemo(
+    () =>
+      checkpoints.filter((checkpoint) =>
+        selectedCheckpointIds.includes(Number(checkpoint.id)),
+      ),
+    [checkpoints, selectedCheckpointIds],
+  );
+
+  const toggleCheckpoint = (checkpointId) => {
+    const id = Number(checkpointId);
+
+    setSelectedCheckpointIds((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
+    );
+    setPage(1);
+  };
+
+  const clearCheckpointFilter = () => {
+    setSelectedCheckpointIds([]);
+    setCheckpointSearch("");
+    setPage(1);
   };
 
   const handleReset = () => {
@@ -355,6 +672,9 @@ export default function ModernPayrollView() {
 
     setYm(defYM);
     setSearch("");
+    setSelectedCheckpointIds([]);
+    setCheckpointSearch("");
+    setCheckpointDropdownOpen(false);
     setPage(1);
     setLimit(10);
   };
@@ -400,14 +720,46 @@ export default function ModernPayrollView() {
             </p>
           </div>
 
-          <button
-            onClick={handleExportCSV}
-            disabled={isLoading || rows.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportCSV}
+              disabled={isLoading || rows.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+
+            <button
+              onClick={handleExportPDF}
+              disabled={isLoading || isExportingPDF || rows.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileText className="w-4 h-4" />
+              {isExportingPDF ? "Exporting PDF..." : "Export PDF"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-5">
+          <p className="text-sm font-medium text-gray-500">
+            Employees This Month
+          </p>
+          <p className="mt-2 text-3xl font-bold text-slate-800">
+            {monthlyEmployeeCount}
+          </p>
+        </div>
+
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-md p-5 text-white">
+          <p className="text-sm font-medium text-blue-100">
+            Total Salary for This Month
+          </p>
+          <p className="mt-2 text-3xl font-bold">{money(monthlyNetSalary)}</p>
+          <p className="mt-1 text-xs text-blue-100">
+            Total of employee net pay
+          </p>
         </div>
       </div>
 
@@ -421,7 +773,7 @@ export default function ModernPayrollView() {
           <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Calendar className="w-4 h-4 inline mr-1" />
@@ -455,6 +807,125 @@ export default function ModernPayrollView() {
             />
           </div>
 
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Filter className="w-4 h-4 inline mr-1" />
+              Checkpoints
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setCheckpointDropdownOpen((current) => !current)}
+              className="w-full min-h-[42px] px-3 py-2 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <span className="truncate text-sm text-gray-700">
+                {selectedCheckpointIds.length === 0
+                  ? "All checkpoints"
+                  : `${selectedCheckpointIds.length} checkpoint${
+                      selectedCheckpointIds.length === 1 ? "" : "s"
+                    } selected`}
+              </span>
+              <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+            </button>
+
+            {checkpointDropdownOpen && (
+              <div className="absolute z-50 mt-2 w-full min-w-[320px] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+                <div className="p-3 border-b border-gray-100">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={checkpointSearch}
+                      onChange={(event) =>
+                        setCheckpointSearch(event.target.value)
+                      }
+                      placeholder="Search checkpoint or address..."
+                      autoFocus
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50">
+                  <span className="text-xs text-gray-500">
+                    {selectedCheckpointIds.length} selected
+                  </span>
+                  {selectedCheckpointIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearCheckpointFilter}
+                      className="text-xs font-medium text-red-600 hover:text-red-700"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-64 overflow-y-auto p-2">
+                  {isLoadingCheckpoints ? (
+                    <div className="py-6 text-center text-sm text-gray-500">
+                      Loading checkpoints...
+                    </div>
+                  ) : filteredCheckpoints.length === 0 ? (
+                    <div className="py-6 text-center text-sm text-gray-500">
+                      No checkpoints found
+                    </div>
+                  ) : (
+                    filteredCheckpoints.map((checkpoint) => {
+                      const checkpointId = Number(checkpoint.id);
+                      const isSelected =
+                        selectedCheckpointIds.includes(checkpointId);
+
+                      return (
+                        <button
+                          type="button"
+                          key={checkpoint.id}
+                          onClick={() => toggleCheckpoint(checkpointId)}
+                          className={`w-full px-3 py-2 rounded-lg flex items-start gap-3 text-left transition-colors ${
+                            isSelected
+                              ? "bg-blue-50 text-blue-800"
+                              : "hover:bg-gray-50 text-gray-700"
+                          }`}
+                        >
+                          <span
+                            className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? "bg-blue-600 border-blue-600 text-white"
+                                : "border-gray-300 bg-white"
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5" />}
+                          </span>
+
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium truncate">
+                              {checkpoint.checkpoint_name ||
+                                `Checkpoint ${checkpoint.id}`}
+                            </span>
+                            <span className="block text-xs text-gray-500 truncate">
+                              {checkpoint.address ||
+                                `Checkpoint ID: ${checkpoint.id}`}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="p-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setCheckpointDropdownOpen(false)}
+                    className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                  >
+                    Apply Selection
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Items per page
@@ -484,6 +955,42 @@ export default function ModernPayrollView() {
             </button>
           </div>
         </div>
+
+        {selectedCheckpoints.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Selected checkpoints
+              </p>
+              <button
+                type="button"
+                onClick={clearCheckpointFilter}
+                className="text-xs font-medium text-red-600 hover:text-red-700"
+              >
+                Clear all
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {selectedCheckpoints.map((checkpoint) => (
+                <span
+                  key={checkpoint.id}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-xs font-medium"
+                >
+                  {checkpoint.checkpoint_name || `Checkpoint ${checkpoint.id}`}
+                  <button
+                    type="button"
+                    onClick={() => toggleCheckpoint(checkpoint.id)}
+                    className="hover:text-blue-900"
+                    aria-label={`Remove ${checkpoint.checkpoint_name}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </motion.div>
 
       <motion.div
@@ -553,6 +1060,12 @@ export default function ModernPayrollView() {
                       <p className="text-sm text-gray-500">
                         {row.employee_email || "—"}
                       </p>
+
+                      {row.checkpoint_name && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          {row.checkpoint_name}
+                        </p>
+                      )}
                     </div>
 
                     <div className="hidden xl:flex items-center gap-5">
