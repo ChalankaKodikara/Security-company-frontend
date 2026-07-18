@@ -118,7 +118,16 @@ const PayrollManagement = () => {
       permissionId: 1009,
       description: "Manage client relationships",
     },
-
+    {
+      title: "Invoice Summary ",
+      label: "Managed Invoice Summary",
+      gradient: "from-teal-500 to-teal-600",
+      iconBg: "bg-white/20",
+      icon: <LiaMoneyBillWaveSolid className="text-white text-3xl" />,
+      onClick: () => navigate("/invoice-summary"),
+      permissionId: 1009,
+      description: "View invoice summaries",
+    },
     // {
     //   title: "Spectacles Allowance",
     //   label: "Assigned Employees",

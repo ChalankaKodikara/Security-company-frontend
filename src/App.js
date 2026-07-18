@@ -217,6 +217,9 @@ import ViewIncentivePayroll from "./components/hris/payroll/view_incentive_payro
 import CheckpointAttendance from "./components/hris/payroll/CheckpointAttendance.jsx";
 import ClientManagement from "./components/hris/payroll/ClientManagement.jsx";
 import QuickOnboardNew from "./components/hris/emp_management/employee_quick_onboard/quick-onboard-new.jsx";
+import { Import } from "lucide-react";
+import InvoiceSummary from "./components/hris/payroll/CheckpointInvoiceSummary.jsx";
+
 const AppContent = ({
   isSidebarOpen,
   toggleSidebar,
@@ -752,6 +755,7 @@ const AppContent = ({
           />{" "}
           <Route path="/client-management" element={<ClientManagement />} />{" "}
           <Route path="/quick-onboarding" element={<QuickOnboardNew />} />{" "}
+          <Route path="/invoice-summary" element={<InvoiceSummary />} />
         </Routes>
       </div>
     </div>
