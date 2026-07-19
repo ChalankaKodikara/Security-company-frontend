@@ -4,6 +4,26 @@ import { toast, ToastContainer } from "react-toastify";
 import { apiFetch } from "../../../../utils/apiClient";
 import "react-toastify/dist/ReactToastify.css";
 
+const EMPLOYEE_CATEGORY_OPTIONS = [
+  { value: "Direct", label: "Direct" },
+  { value: "Indirect", label: "Indirect" },
+  { value: "JSO", label: "JSO" },
+  { value: "OIC", label: "OIC" },
+  { value: "VO", label: "VO" },
+  { value: "LSO", label: "LSO" },
+  { value: "HO_STAFF", label: "HO STAFF" },
+];
+
+const PAYROLL_GROUP_OPTIONS = [
+  { value: "HO", label: "HO" },
+  { value: "SECURITY", label: "SECURITY" },
+];
+
+const PAYROLL_SCHEME_OPTIONS = [
+  { value: "STANDARD", label: "STANDARD" },
+  { value: "EXEMPT", label: "EXEMPT" },
+];
+
 const initialForm = {
   organization_id: "",
   unique_key: "",
@@ -17,6 +37,7 @@ const initialForm = {
   employee_permanent_address: "",
   payroll_group: "HO",
   payroll_scheme: "STANDARD",
+  employee_category: "",
   checkpoint_id: "",
 };
 
@@ -24,6 +45,9 @@ export default function QuickOnboardEmployee() {
   const API_URL = process.env.REACT_APP_FRONTEND_URL;
 
   const [saving, setSaving] = useState(false);
+  const [loadingOrganizations, setLoadingOrganizations] = useState(false);
+  const [loadingCheckpoints, setLoadingCheckpoints] = useState(false);
+
   const [organizationOptions, setOrganizationOptions] = useState([]);
   const [checkpointOptions, setCheckpointOptions] = useState([]);
   const [form, setForm] = useState(initialForm);
@@ -36,10 +60,34 @@ export default function QuickOnboardEmployee() {
     );
   }, [organizationOptions, form.organization_id]);
 
+  const selectedPayrollGroup = useMemo(() => {
+    return (
+      PAYROLL_GROUP_OPTIONS.find(
+        (option) => option.value === form.payroll_group,
+      ) || null
+    );
+  }, [form.payroll_group]);
+
+  const selectedPayrollScheme = useMemo(() => {
+    return (
+      PAYROLL_SCHEME_OPTIONS.find(
+        (option) => option.value === form.payroll_scheme,
+      ) || null
+    );
+  }, [form.payroll_scheme]);
+
+  const selectedEmployeeCategory = useMemo(() => {
+    return (
+      EMPLOYEE_CATEGORY_OPTIONS.find(
+        (option) => option.value === form.employee_category,
+      ) || null
+    );
+  }, [form.employee_category]);
+
   const selectedCheckpoint = useMemo(() => {
     return (
       checkpointOptions.find(
-        (cp) => String(cp.value) === String(form.checkpoint_id),
+        (checkpoint) => String(checkpoint.value) === String(form.checkpoint_id),
       ) || null
     );
   }, [checkpointOptions, form.checkpoint_id]);
@@ -47,13 +95,19 @@ export default function QuickOnboardEmployee() {
   useEffect(() => {
     const fetchOrganizations = async () => {
       try {
-        const res = await apiFetch(
+        setLoadingOrganizations(true);
+
+        const response = await apiFetch(
           `${API_URL}/v1/hris/organizations/organization`,
         );
 
-        const json = await res.json();
+        const json = await response.json();
 
-        const orgs = Array.isArray(json)
+        if (!response.ok) {
+          throw new Error(json?.message || "Failed to load organizations");
+        }
+
+        const organizations = Array.isArray(json)
           ? json
           : Array.isArray(json?.data)
             ? json.data
@@ -61,53 +115,127 @@ export default function QuickOnboardEmployee() {
               ? json.organizations
               : [];
 
-        setOrganizationOptions(
-          orgs.map((org) => ({
-            value: org.id,
-            code: org.code,
-            label: `${org.organization_name || org.name || "Organization"} ${
-              org.code ? `(${org.code})` : ""
-            }`,
-          })),
-        );
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load organizations");
+        const options = organizations.map((organization) => ({
+          value: organization.id,
+          code: organization.code || organization.unique_key || "",
+          label: `${
+            organization.organization_name ||
+            organization.name ||
+            "Organization"
+          } ${
+            organization.code || organization.unique_key
+              ? `(${organization.code || organization.unique_key})`
+              : ""
+          }`,
+        }));
+
+        setOrganizationOptions(options);
+      } catch (error) {
+        console.error("fetchOrganizations error:", error);
+        toast.error(error.message || "Failed to load organizations");
+      } finally {
+        setLoadingOrganizations(false);
       }
     };
 
-    fetchOrganizations();
+    if (API_URL) {
+      fetchOrganizations();
+    }
   }, [API_URL]);
 
   useEffect(() => {
     const fetchCheckpoints = async () => {
       try {
-        const res = await apiFetch(`${API_URL}/v1/hris/client/checkpoints`);
-        const json = await res.json();
+        setLoadingCheckpoints(true);
 
-        if (json?.success && Array.isArray(json.checkpoints)) {
-          setCheckpointOptions(
-            json.checkpoints.map((cp) => ({
-              value: cp.id,
-              label: `${cp.checkpoint_name} - ${cp.client_name || "No Client"}`,
-            })),
-          );
+        const response = await apiFetch(
+          `${API_URL}/v1/hris/client/checkpoints`,
+        );
+
+        const json = await response.json();
+
+        if (!response.ok) {
+          throw new Error(json?.message || "Failed to load checkpoints");
         }
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load checkpoints");
+
+        const checkpoints = Array.isArray(json)
+          ? json
+          : Array.isArray(json?.checkpoints)
+            ? json.checkpoints
+            : Array.isArray(json?.data)
+              ? json.data
+              : [];
+
+        const options = checkpoints.map((checkpoint) => ({
+          value: checkpoint.id,
+          label: `${checkpoint.checkpoint_name || "Checkpoint"} - ${
+            checkpoint.client_name || "No Client"
+          }`,
+        }));
+
+        setCheckpointOptions(options);
+      } catch (error) {
+        console.error("fetchCheckpoints error:", error);
+        toast.error(error.message || "Failed to load checkpoints");
+      } finally {
+        setLoadingCheckpoints(false);
       }
     };
 
-    fetchCheckpoints();
+    if (API_URL) {
+      fetchCheckpoints();
+    }
   }, [API_URL]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const handleChange = (event) => {
+    const { name, value } = event.target;
 
-    setForm((prev) => ({
-      ...prev,
+    setForm((previous) => ({
+      ...previous,
       [name]: value,
+    }));
+  };
+
+  const handleOrganizationChange = (option) => {
+    setForm((previous) => ({
+      ...previous,
+      organization_id: option?.value || "",
+      unique_key: option?.code || "",
+    }));
+  };
+
+  const handlePayrollGroupChange = (option) => {
+    const payrollGroup = option?.value || "HO";
+
+    setForm((previous) => ({
+      ...previous,
+      payroll_group: payrollGroup,
+
+      employee_category:
+        payrollGroup === "SECURITY" ? previous.employee_category : "",
+
+      checkpoint_id: payrollGroup === "SECURITY" ? previous.checkpoint_id : "",
+    }));
+  };
+
+  const handlePayrollSchemeChange = (option) => {
+    setForm((previous) => ({
+      ...previous,
+      payroll_scheme: option?.value || "STANDARD",
+    }));
+  };
+
+  const handleEmployeeCategoryChange = (option) => {
+    setForm((previous) => ({
+      ...previous,
+      employee_category: option?.value || "",
+    }));
+  };
+
+  const handleCheckpointChange = (option) => {
+    setForm((previous) => ({
+      ...previous,
+      checkpoint_id: option?.value || "",
     }));
   };
 
@@ -127,36 +255,49 @@ export default function QuickOnboardEmployee() {
       ["payroll_scheme", "Payroll scheme"],
     ];
 
-    for (const [key, label] of requiredFields) {
-      if (!String(form[key] || "").trim()) {
+    for (const [field, label] of requiredFields) {
+      const value = form[field];
+
+      if (!String(value || "").trim()) {
         toast.warning(`${label} is required`);
         return false;
       }
     }
 
-    if (form.payroll_group === "SECURITY" && !form.checkpoint_id) {
-      toast.warning("Checkpoint is required for security employees");
-      return false;
+    if (form.payroll_group === "SECURITY") {
+      if (!form.employee_category) {
+        toast.warning("Employee category is required for security employees");
+        return false;
+      }
+
+      if (!form.checkpoint_id) {
+        toast.warning("Checkpoint is required for security employees");
+        return false;
+      }
     }
 
     return true;
   };
 
   const resetForm = () => {
-    setForm(initialForm);
+    setForm({ ...initialForm });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
 
     try {
       setSaving(true);
 
+      const isSecurityEmployee = form.payroll_group === "SECURITY";
+
       const payload = {
         organization_id: Number(form.organization_id),
-        unique_key: form.unique_key,
+        unique_key: form.unique_key.trim(),
 
         employee_fullname: form.employee_fullname.trim(),
         employee_name_initial: form.employee_name_initial.trim(),
@@ -169,19 +310,24 @@ export default function QuickOnboardEmployee() {
 
         payroll_group: form.payroll_group,
         payroll_scheme: form.payroll_scheme,
-        checkpoint_id:
-          form.payroll_group === "SECURITY" ? Number(form.checkpoint_id) : null,
+
+        employee_category: isSecurityEmployee ? form.employee_category : null,
+
+        checkpoint_id: isSecurityEmployee ? Number(form.checkpoint_id) : null,
       };
 
-      const res = await apiFetch(`${API_URL}/v1/hris/employees/quick-onboard`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const response = await apiFetch(
+        `${API_URL}/v1/hris/employees/quick-onboard`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+      );
 
-      const json = await res.json();
+      const json = await response.json();
 
-      if (!res.ok || !json?.success) {
-        throw new Error(json?.message || "Failed to onboard employee");
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || "Failed to quick onboard employee");
       }
 
       toast.success(
@@ -192,7 +338,8 @@ export default function QuickOnboardEmployee() {
 
       resetForm();
     } catch (error) {
-      toast.error(error.message);
+      console.error("handleSubmit error:", error);
+      toast.error(error.message || "Failed to onboard employee");
     } finally {
       setSaving(false);
     }
@@ -202,39 +349,40 @@ export default function QuickOnboardEmployee() {
     <div className="min-h-screen bg-slate-50 p-6">
       <ToastContainer position="top-right" autoClose={3000} />
 
-      <div className="max-w-5xl mx-auto">
+      <div className="mx-auto max-w-5xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-slate-800">Quick Onboard</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Create employee with minimum personal and payroll details.
+
+          <p className="mt-1 text-sm text-slate-500">
+            Create an employee with minimum personal and payroll details.
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow border border-slate-200 p-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow">
           <form
             onSubmit={handleSubmit}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+            className="grid grid-cols-1 gap-4 md:grid-cols-2"
           >
             <div className="md:col-span-2">
               <SectionTitle title="Organization" />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Organization
-              </label>
+              <FieldLabel label="Organization" required />
+
               <Select
                 options={organizationOptions}
                 value={selectedOrganization}
-                onChange={(opt) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    organization_id: opt?.value || "",
-                    unique_key: opt?.code || "",
-                  }))
+                onChange={handleOrganizationChange}
+                placeholder={
+                  loadingOrganizations
+                    ? "Loading organizations..."
+                    : "Select organization"
                 }
-                placeholder="Select organization"
+                isLoading={loadingOrganizations}
+                isDisabled={loadingOrganizations || saving}
                 isSearchable
+                isClearable
               />
             </div>
 
@@ -244,9 +392,10 @@ export default function QuickOnboardEmployee() {
               value={form.unique_key}
               onChange={handleChange}
               disabled
+              required
             />
 
-            <div className="md:col-span-2 mt-3">
+            <div className="mt-3 md:col-span-2">
               <SectionTitle title="Personal Details" />
             </div>
 
@@ -255,6 +404,7 @@ export default function QuickOnboardEmployee() {
               name="employee_fullname"
               value={form.employee_fullname}
               onChange={handleChange}
+              required
             />
 
             <Input
@@ -262,6 +412,7 @@ export default function QuickOnboardEmployee() {
               name="employee_name_initial"
               value={form.employee_name_initial}
               onChange={handleChange}
+              required
             />
 
             <Input
@@ -269,6 +420,7 @@ export default function QuickOnboardEmployee() {
               name="employee_calling_name"
               value={form.employee_calling_name}
               onChange={handleChange}
+              required
             />
 
             <Input
@@ -276,6 +428,7 @@ export default function QuickOnboardEmployee() {
               name="employee_nic"
               value={form.employee_nic}
               onChange={handleChange}
+              required
             />
 
             <Input
@@ -284,17 +437,18 @@ export default function QuickOnboardEmployee() {
               name="employee_dob"
               value={form.employee_dob}
               onChange={handleChange}
+              required
             />
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Gender
-              </label>
+              <FieldLabel label="Gender" required />
+
               <select
                 name="employee_gender"
                 value={form.employee_gender}
                 onChange={handleChange}
-                className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={saving}
+                className="w-full rounded-lg border border-slate-300 p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
               >
                 <option value="">Select Gender</option>
                 <option value="Male">Male</option>
@@ -307,96 +461,95 @@ export default function QuickOnboardEmployee() {
               name="employee_contact_no"
               value={form.employee_contact_no}
               onChange={handleChange}
+              required
             />
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Permanent Address
-              </label>
+              <FieldLabel label="Permanent Address" required />
+
               <textarea
                 name="employee_permanent_address"
                 value={form.employee_permanent_address}
                 onChange={handleChange}
-                className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={saving}
                 rows={3}
+                className="w-full rounded-lg border border-slate-300 p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100"
               />
             </div>
 
-            <div className="md:col-span-2 mt-3">
+            <div className="mt-3 md:col-span-2">
               <SectionTitle title="Payroll Details" />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Payroll Group
-              </label>
+              <FieldLabel label="Payroll Group" required />
+
               <Select
-                value={{
-                  value: form.payroll_group,
-                  label: form.payroll_group,
-                }}
-                options={[
-                  { value: "HO", label: "HO" },
-                  { value: "SECURITY", label: "SECURITY" },
-                ]}
-                onChange={(opt) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    payroll_group: opt?.value || "HO",
-                    checkpoint_id:
-                      opt?.value === "SECURITY" ? prev.checkpoint_id : "",
-                  }))
-                }
+                options={PAYROLL_GROUP_OPTIONS}
+                value={selectedPayrollGroup}
+                onChange={handlePayrollGroupChange}
+                placeholder="Select payroll group"
+                isDisabled={saving}
+                isSearchable={false}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Payroll Scheme
-              </label>
+              <FieldLabel label="Payroll Scheme" required />
+
               <Select
-                value={{
-                  value: form.payroll_scheme,
-                  label: form.payroll_scheme,
-                }}
-                options={[
-                  { value: "STANDARD", label: "STANDARD" },
-                  { value: "EXEMPT", label: "EXEMPT" },
-                ]}
-                onChange={(opt) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    payroll_scheme: opt?.value || "STANDARD",
-                  }))
-                }
+                options={PAYROLL_SCHEME_OPTIONS}
+                value={selectedPayrollScheme}
+                onChange={handlePayrollSchemeChange}
+                placeholder="Select payroll scheme"
+                isDisabled={saving}
+                isSearchable={false}
               />
             </div>
 
             {form.payroll_group === "SECURITY" && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-600 mb-1">
-                  Checkpoint
-                </label>
-                <Select
-                  options={checkpointOptions}
-                  value={selectedCheckpoint}
-                  onChange={(opt) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      checkpoint_id: opt?.value || "",
-                    }))
-                  }
-                  placeholder="Select checkpoint"
-                  isSearchable
-                />
-              </div>
+              <>
+                <div>
+                  <FieldLabel label="Employee Category" required />
+
+                  <Select
+                    options={EMPLOYEE_CATEGORY_OPTIONS}
+                    value={selectedEmployeeCategory}
+                    onChange={handleEmployeeCategoryChange}
+                    placeholder="Select employee category"
+                    isDisabled={saving}
+                    isSearchable
+                    isClearable
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel label="Checkpoint" required />
+
+                  <Select
+                    options={checkpointOptions}
+                    value={selectedCheckpoint}
+                    onChange={handleCheckpointChange}
+                    placeholder={
+                      loadingCheckpoints
+                        ? "Loading checkpoints..."
+                        : "Select checkpoint"
+                    }
+                    isLoading={loadingCheckpoints}
+                    isDisabled={loadingCheckpoints || saving}
+                    isSearchable
+                    isClearable
+                  />
+                </div>
+              </>
             )}
 
-            <div className="md:col-span-2 flex justify-end gap-3 pt-4 border-t mt-4">
+            <div className="mt-4 flex justify-end gap-3 border-t pt-4 md:col-span-2">
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100"
+                disabled={saving}
+                className="rounded-lg border border-slate-300 px-6 py-2 text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Clear
               </button>
@@ -404,7 +557,7 @@ export default function QuickOnboardEmployee() {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Quick Onboard"}
               </button>
@@ -419,10 +572,20 @@ export default function QuickOnboardEmployee() {
 function SectionTitle({ title }) {
   return (
     <div className="border-b border-slate-200 pb-2">
-      <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
+      <h2 className="text-sm font-bold uppercase tracking-wide text-slate-700">
         {title}
       </h2>
     </div>
+  );
+}
+
+function FieldLabel({ label, required = false }) {
+  return (
+    <label className="mb-1 block text-sm font-medium text-slate-600">
+      {label}
+
+      {required && <span className="ml-1 text-red-500">*</span>}
+    </label>
   );
 }
 
@@ -433,20 +596,20 @@ function Input({
   onChange,
   type = "text",
   disabled = false,
+  required = false,
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-600 mb-1">
-        {label}
-      </label>
+      <FieldLabel label={label} required={required} />
+
       <input
         type={type}
         name={name}
         value={value}
         disabled={disabled}
         onChange={onChange}
-        className={`w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-          disabled ? "bg-slate-100 cursor-not-allowed" : ""
+        className={`w-full rounded-lg border border-slate-300 p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+          disabled ? "cursor-not-allowed bg-slate-100" : ""
         }`}
       />
     </div>
