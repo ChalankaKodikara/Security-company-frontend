@@ -119,15 +119,16 @@ const PayrollManagement = () => {
       description: "Manage client relationships",
     },
     {
-      title: "Invoice Summary ",
-      label: "Managed Invoice Summary",
+      title: "Attendance Sheet download",
+      label: "Managed Attendance Sheets",
       gradient: "from-teal-500 to-teal-600",
       iconBg: "bg-white/20",
       icon: <LiaMoneyBillWaveSolid className="text-white text-3xl" />,
-      onClick: () => navigate("/invoice-summary"),
+      onClick: () => navigate("/attendance-sheets"),
       permissionId: 1009,
-      description: "View invoice summaries",
+      description: "View attendance sheets",
     },
+
     // {
     //   title: "Spectacles Allowance",
     //   label: "Assigned Employees",

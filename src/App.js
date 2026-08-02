@@ -219,7 +219,7 @@ import ClientManagement from "./components/hris/payroll/ClientManagement.jsx";
 import QuickOnboardNew from "./components/hris/emp_management/employee_quick_onboard/quick-onboard-new.jsx";
 import { Import } from "lucide-react";
 import InvoiceSummary from "./components/hris/payroll/CheckpointInvoiceSummary.jsx";
-
+import AttendanceSheetDownload from "./components/hris/payroll/AttendanceSheetDownload.jsx";
 const AppContent = ({
   isSidebarOpen,
   toggleSidebar,
@@ -377,6 +377,10 @@ const AppContent = ({
           <Route path="/payroll-navigation" element={<Payroll_Navigation />} />
           <Route path="/payroll-allowance" element={<Payroll_Allowance />} />
           <Route path="/payroll-deduction" element={<Payroll_Deduction />} />
+          <Route
+            path="/attendance-sheets"
+            element={<AttendanceSheetDownload />}
+          />
           <Route
             path="/allowance-component"
             element={<Allowance_Component />}
