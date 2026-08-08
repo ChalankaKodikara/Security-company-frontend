@@ -129,6 +129,17 @@ const PayrollManagement = () => {
       description: "View attendance sheets",
     },
 
+       { 
+      title: "Attendance Summery download",
+      label
+      : "Managed Attendance Summery",
+      gradient: "from-teal-500 to-teal-600",
+      iconBg: "bg-white/20",
+      icon: <LiaMoneyBillWaveSolid className="text-white text-3xl" />,
+      onClick: () => navigate("/invoice-summary"),
+      permissionId: 1009,
+      description: "View attendance sheets",
+    },
     // {
     //   title: "Spectacles Allowance",
     //   label: "Assigned Employees",
