@@ -10,6 +10,7 @@ import React, {
 
 import {
   Building2,
+  CalendarDays,
   Check,
   ChevronDown,
   Download,
@@ -164,6 +165,48 @@ const getFileNameFromHeader = (contentDisposition) => {
 
 /*
 |--------------------------------------------------------------------------
+| Month / Year Helpers
+|--------------------------------------------------------------------------
+*/
+
+const MONTHS = [
+  { value: 1, label: "January" },
+  { value: 2, label: "February" },
+  { value: 3, label: "March" },
+  { value: 4, label: "April" },
+  { value: 5, label: "May" },
+  { value: 6, label: "June" },
+  { value: 7, label: "July" },
+  { value: 8, label: "August" },
+  { value: 9, label: "September" },
+  { value: 10, label: "October" },
+  { value: 11, label: "November" },
+  { value: 12, label: "December" },
+];
+
+const getDaysInMonth = (month, year) => {
+  const monthNumber = Number(month);
+  const yearNumber = Number(year);
+
+  if (
+    !Number.isInteger(monthNumber) ||
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    !Number.isInteger(yearNumber)
+  ) {
+    return 0;
+  }
+
+  return new Date(yearNumber, monthNumber, 0).getDate();
+};
+
+const buildYearOptions = () => {
+  const currentYear = new Date().getFullYear();
+  return Array.from({ length: 7 }, (_, index) => currentYear - 3 + index);
+};
+
+/*
+|--------------------------------------------------------------------------
 | Component
 |--------------------------------------------------------------------------
 */
@@ -171,12 +214,21 @@ const getFileNameFromHeader = (contentDisposition) => {
 const AttendanceSheetDownload = () => {
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
-  const searchTimeoutRef = useRef(null);
   const requestControllerRef = useRef(null);
+
+  const currentDate = useMemo(() => new Date(), []);
+
+  const [attendanceMonth, setAttendanceMonth] = useState(
+    currentDate.getMonth() + 1,
+  );
+
+  const [attendanceYear, setAttendanceYear] = useState(
+    currentDate.getFullYear(),
+  );
 
   const [checkpointSearch, setCheckpointSearch] = useState("");
 
-  const [checkpoints, setCheckpoints] = useState([]);
+  const [allCheckpoints, setAllCheckpoints] = useState([]);
 
   const [selectedCheckpoint, setSelectedCheckpoint] = useState(null);
 
@@ -195,6 +247,46 @@ const AttendanceSheetDownload = () => {
     () => getCheckpointName(selectedCheckpoint),
     [selectedCheckpoint],
   );
+
+  const yearOptions = useMemo(() => buildYearOptions(), []);
+
+  const selectedMonthName = useMemo(
+    () =>
+      MONTHS.find((month) => month.value === Number(attendanceMonth))?.label ||
+      "",
+    [attendanceMonth],
+  );
+
+  const selectedMonthDays = useMemo(
+    () => getDaysInMonth(attendanceMonth, attendanceYear),
+    [attendanceMonth, attendanceYear],
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Frontend Checkpoint Search
+  |--------------------------------------------------------------------------
+  */
+
+  const checkpoints = useMemo(() => {
+    const searchValue = checkpointSearch.trim().toLowerCase();
+
+    if (!searchValue) {
+      return allCheckpoints;
+    }
+
+    return allCheckpoints.filter((checkpoint) => {
+      const checkpointId = String(getCheckpointId(checkpoint) || "").toLowerCase();
+      const checkpointName = String(getCheckpointName(checkpoint) || "").toLowerCase();
+      const clientName = String(getClientName(checkpoint) || "").toLowerCase();
+
+      return (
+        checkpointId.includes(searchValue) ||
+        checkpointName.includes(searchValue) ||
+        clientName.includes(searchValue)
+      );
+    });
+  }, [allCheckpoints, checkpointSearch]);
 
   /*
   |--------------------------------------------------------------------------
@@ -221,78 +313,67 @@ const AttendanceSheetDownload = () => {
   |--------------------------------------------------------------------------
   */
 
-  const loadCheckpoints = useCallback(
-    async (searchValue = "") => {
-      if (requestControllerRef.current) {
-        requestControllerRef.current.abort();
-      }
+  const loadCheckpoints = useCallback(async () => {
+    if (requestControllerRef.current) {
+      requestControllerRef.current.abort();
+    }
 
-      const controller = new AbortController();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
 
-      requestControllerRef.current = controller;
+    try {
+      setIsLoadingCheckpoints(true);
 
-      try {
-        setIsLoadingCheckpoints(true);
+      // Frontend search needs the checkpoint list to be available locally.
+      // Increase this limit if your backend allows a larger value.
+      const queryParams = new URLSearchParams({
+        page: "1",
+        limit: "1000",
+        is_active: "1",
+      });
 
-        const queryParams = new URLSearchParams({
-          page: "1",
-          limit: "50",
-          is_active: "1",
-        });
+      const response = await fetch(
+        `${API_BASE_URL}${CHECKPOINT_SEARCH_ENDPOINT}?${queryParams.toString()}`,
+        {
+          method: "GET",
+          headers: getRequestHeaders("application/json"),
+          signal: controller.signal,
+          credentials: "include",
+        },
+      );
 
-        if (searchValue.trim()) {
-          queryParams.set("search", searchValue.trim());
-        }
-
-        const response = await fetch(
-          `${API_BASE_URL}${CHECKPOINT_SEARCH_ENDPOINT}?${queryParams.toString()}`,
-          {
-            method: "GET",
-            headers: getRequestHeaders("application/json"),
-            signal: controller.signal,
-
-            // Keep this when your backend authentication uses cookies.
-            credentials: "include",
-          },
+      if (!response.ok) {
+        const errorMessage = await getFetchErrorMessage(
+          response,
+          "Failed to load checkpoints.",
         );
 
-        if (!response.ok) {
-          const errorMessage = await getFetchErrorMessage(
-            response,
-            "Failed to load checkpoints.",
-          );
-
-          throw new Error(errorMessage);
-        }
-
-        const responseData = await response.json();
-
-        const checkpointList = extractCheckpointArray(responseData);
-
-        const validCheckpoints = checkpointList.filter(
-          (checkpoint) => getCheckpointId(checkpoint) !== "",
-        );
-
-        setCheckpoints(validCheckpoints);
-      } catch (error) {
-        if (error?.name === "AbortError") {
-          return;
-        }
-
-        console.error("Load checkpoints error:", error);
-
-        setCheckpoints([]);
-
-        toast.error(error?.message || "Failed to load checkpoints.");
-      } finally {
-        if (requestControllerRef.current === controller) {
-          setIsLoadingCheckpoints(false);
-          requestControllerRef.current = null;
-        }
+        throw new Error(errorMessage);
       }
-    },
-    [getRequestHeaders],
-  );
+
+      const responseData = await response.json();
+      const checkpointList = extractCheckpointArray(responseData);
+
+      const validCheckpoints = checkpointList.filter(
+        (checkpoint) => getCheckpointId(checkpoint) !== "",
+      );
+
+      setAllCheckpoints(validCheckpoints);
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        return;
+      }
+
+      console.error("Load checkpoints error:", error);
+      setAllCheckpoints([]);
+      toast.error(error?.message || "Failed to load checkpoints.");
+    } finally {
+      if (requestControllerRef.current === controller) {
+        setIsLoadingCheckpoints(false);
+        requestControllerRef.current = null;
+      }
+    }
+  }, [getRequestHeaders]);
 
   /*
   |--------------------------------------------------------------------------
@@ -301,7 +382,7 @@ const AttendanceSheetDownload = () => {
   */
 
   useEffect(() => {
-    loadCheckpoints("");
+    loadCheckpoints();
 
     return () => {
       if (requestControllerRef.current) {
@@ -309,32 +390,6 @@ const AttendanceSheetDownload = () => {
       }
     };
   }, [loadCheckpoints]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Search Debounce
-  |--------------------------------------------------------------------------
-  */
-
-  useEffect(() => {
-    if (!isDropdownOpen) {
-      return undefined;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      loadCheckpoints(checkpointSearch);
-    }, 400);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [checkpointSearch, isDropdownOpen, loadCheckpoints]);
 
   /*
   |--------------------------------------------------------------------------
@@ -393,15 +448,14 @@ const AttendanceSheetDownload = () => {
     setCheckpointSearch("");
     setIsDropdownOpen(false);
 
-    loadCheckpoints("");
   };
 
   const handleReset = () => {
     setSelectedCheckpoint(null);
     setCheckpointSearch("");
     setIsDropdownOpen(false);
-
-    loadCheckpoints("");
+    setAttendanceMonth(currentDate.getMonth() + 1);
+    setAttendanceYear(currentDate.getFullYear());
   };
 
   /*
@@ -413,7 +467,11 @@ const AttendanceSheetDownload = () => {
   const handleDownloadAttendanceSheet = async () => {
     if (!selectedCheckpointId) {
       toast.warning("Please select a checkpoint first.");
+      return;
+    }
 
+    if (!attendanceMonth || !attendanceYear) {
+      toast.warning("Please select attendance month and year.");
       return;
     }
 
@@ -422,6 +480,8 @@ const AttendanceSheetDownload = () => {
 
       const queryParams = new URLSearchParams({
         checkpoint_id: String(selectedCheckpointId),
+        attendance_month: String(attendanceMonth),
+        attendance_year: String(attendanceYear),
       });
 
       const response = await fetch(
@@ -469,7 +529,7 @@ const AttendanceSheetDownload = () => {
 
       const fallbackFileName = `${sanitizeFileName(
         selectedCheckpointName,
-      )}-attendance-sheet.xlsx`;
+      )}-${selectedMonthName}-${attendanceYear}-attendance-sheet.xlsx`;
 
       const downloadFileName = backendFileName || fallbackFileName;
 
@@ -548,18 +608,170 @@ const AttendanceSheetDownload = () => {
           </div>
 
           <div className="p-6">
+            {/* Attendance Period Filters */}
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                  <CalendarDays size={20} />
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Attendance Period
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Select the month and year for the attendance workbook.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Month
+                  </label>
+                  <select
+                    value={attendanceMonth}
+                    onChange={(event) =>
+                      setAttendanceMonth(Number(event.target.value))
+                    }
+                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  >
+                    {MONTHS.map((month) => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Year
+                  </label>
+                  <select
+                    value={attendanceYear}
+                    onChange={(event) =>
+                      setAttendanceYear(Number(event.target.value))
+                    }
+                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  >
+                    {yearOptions.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Complete Date Count
+                  </label>
+                  <div className="flex h-11 items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4">
+                    <div>
+                      <span className="text-sm font-bold text-emerald-800">
+                        {selectedMonthDays} days
+                      </span>
+                      <span className="ml-2 text-xs text-emerald-600">
+                        {selectedMonthName} {attendanceYear}
+                      </span>
+                    </div>
+                    <CalendarDays className="text-emerald-600" size={18} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+                <p className="text-xs leading-5 text-blue-700">
+                  The selected month uses its exact calendar day count: 31-day
+                  months → 31 dates, 30-day months → 30 dates, and February → 28
+                  dates or 29 dates in a leap year.
+                </p>
+              </div>
+            </div>
+
             <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
               {/* Checkpoint Selection */}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Select Checkpoint
-                  <span className="ml-1 text-red-500">*</span>
+                  Search Checkpoint
                 </label>
+
+                <div className="relative mb-4">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={18}
+                  />
+
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={checkpointSearch}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    onChange={(event) => {
+                      setCheckpointSearch(event.target.value);
+                      setIsDropdownOpen(true);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setIsDropdownOpen(false);
+                      }
+
+                      if (
+                        event.key === "Enter" &&
+                        !isLoadingCheckpoints &&
+                        checkpoints.length === 1
+                      ) {
+                        event.preventDefault();
+                        handleSelectCheckpoint(checkpoints[0]);
+                      }
+                    }}
+                    placeholder="Search checkpoint or client..."
+                    className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  />
+
+                  {checkpointSearch ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCheckpointSearch("");
+                        setIsDropdownOpen(true);
+                        searchInputRef.current?.focus();
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      aria-label="Clear checkpoint search"
+                    >
+                      <X size={17} />
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Select Checkpoint
+                    <span className="ml-1 text-red-500">*</span>
+                  </label>
+
+                  {checkpointSearch && (
+                    <span className="text-xs font-medium text-slate-400">
+                      {`${checkpoints.length} result${
+                        checkpoints.length === 1 ? "" : "s"
+                      }`}
+                    </span>
+                  )}
+                </div>
 
                 <div ref={dropdownRef} className="relative">
                   <button
                     type="button"
-                    onClick={() => setIsDropdownOpen((previous) => !previous)}
+                    onClick={() => {
+                      setIsDropdownOpen((previous) => !previous);
+                      window.setTimeout(
+                        () => searchInputRef.current?.focus(),
+                        0,
+                      );
+                    }}
                     className={`flex min-h-[54px] w-full items-center justify-between rounded-xl border bg-white px-4 text-left outline-none transition ${
                       isDropdownOpen
                         ? "border-emerald-500 ring-4 ring-emerald-100"
@@ -629,34 +841,21 @@ const AttendanceSheetDownload = () => {
 
                   {isDropdownOpen && (
                     <div className="absolute left-0 right-0 top-[62px] z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-                      <div className="border-b border-slate-100 p-3">
-                        <div className="relative">
-                          <Search
-                            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                            size={18}
-                          />
-
-                          <input
-                            ref={searchInputRef}
-                            type="text"
-                            value={checkpointSearch}
-                            onChange={(event) =>
-                              setCheckpointSearch(event.target.value)
-                            }
-                            placeholder="Search checkpoint..."
-                            className="h-11 w-full rounded-lg border border-slate-300 bg-slate-50 pl-10 pr-10 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                          />
-
-                          {checkpointSearch && (
-                            <button
-                              type="button"
-                              onClick={() => setCheckpointSearch("")}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                            >
-                              <X size={17} />
-                            </button>
-                          )}
+                      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="text-slate-400" size={16} />
+                          <span className="text-xs font-semibold text-slate-600">
+                            {checkpointSearch
+                              ? "Search results"
+                              : "Available checkpoints"}
+                          </span>
                         </div>
+
+                        {!isLoadingCheckpoints && (
+                          <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
+                            {checkpoints.length}
+                          </span>
+                        )}
                       </div>
 
                       <div className="max-h-72 overflow-y-auto p-2">
@@ -759,7 +958,7 @@ const AttendanceSheetDownload = () => {
                       <div className="border-t border-slate-100 bg-slate-50 px-3 py-2">
                         <button
                           type="button"
-                          onClick={() => loadCheckpoints(checkpointSearch)}
+                          onClick={loadCheckpoints}
                           disabled={isLoadingCheckpoints}
                           className="flex items-center gap-2 text-xs font-medium text-slate-500 transition hover:text-emerald-700 disabled:cursor-not-allowed"
                         >
@@ -800,6 +999,15 @@ const AttendanceSheetDownload = () => {
                         <p className="mt-1 text-xs text-slate-500">
                           Checkpoint ID: {selectedCheckpointId}
                         </p>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                            {selectedMonthName} {attendanceYear}
+                          </span>
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                            {selectedMonthDays} dates
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -837,6 +1045,16 @@ const AttendanceSheetDownload = () => {
                     value="D/S, N/S and OT"
                   />
 
+                  <TemplateItem
+                    label="Selected period"
+                    value={`${selectedMonthName} ${attendanceYear}`}
+                  />
+
+                  <TemplateItem
+                    label="Date rows"
+                    value={`${selectedMonthDays} days`}
+                  />
+
                   <TemplateItem label="Attendance values" value="Blank" />
 
                   <TemplateItem label="Bottom row" value="SUM formulas" />
@@ -844,8 +1062,8 @@ const AttendanceSheetDownload = () => {
 
                 <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <p className="text-xs leading-5 text-amber-800">
-                    The backend creates one worksheet for each active employee
-                    assigned to the selected checkpoint.
+                    The workbook will use the selected month's complete date
+                    range and create attendance rows for every calendar day.
                   </p>
                 </div>
               </div>
@@ -866,7 +1084,12 @@ const AttendanceSheetDownload = () => {
               <button
                 type="button"
                 onClick={handleDownloadAttendanceSheet}
-                disabled={!selectedCheckpointId || isDownloading}
+                disabled={
+                  !selectedCheckpointId ||
+                  !attendanceMonth ||
+                  !attendanceYear ||
+                  isDownloading
+                }
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
               >
                 {isDownloading ? (
